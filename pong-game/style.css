@@ -1,0 +1,47 @@
+body {
+  margin: 0;
+  background: #000;
+  font-family: Arial, sans-serif;
+  overflow: hidden;
+}
+
+canvas {
+  display: block;
+  margin: auto;
+  background: url('assets/images/bg.jpg') no-repeat center center;
+  background-size: cover;
+  border: 3px solid #fff;
+}
+
+.overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0,0,0,0.85);
+  color: white;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  z-index: 10;
+  text-align: center;
+}
+
+button {
+  padding: 15px 30px;
+  font-size: 20px;
+  margin: 10px;
+  cursor: pointer;
+  background-color: gold;
+  color: black;
+  border: none;
+  border-radius: 5px;
+  transition: all 0.2s;
+}
+
+button:hover {
+  background-color: #fff700;
+  transform: scale(1.1);
+}

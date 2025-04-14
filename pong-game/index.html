@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Xpert Pong</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="main-menu" class="overlay">
+    <h1>Xpert Pong</h1>
+    <p>Select your destiny</p>
+    <button onclick="startGame('pvp')">Player vs Player</button>
+    <button onclick="startGame('easy')">Player vs AI (Easy)</button>
+    <button onclick="startGame('hard')">Player vs AI (Hard)</button>
+    <h2>High Score: <span id="high-score">0</span></h2>
+  </div>
+
+  <div id="game-over-screen" class="overlay" style="display:none;">
+    <h1 id="winner-text">Player Wins!</h1>
+    <button onclick="showMainMenu()">Back to Menu</button>
+  </div>
+
+  <canvas id="pong" width="800" height="500"></canvas>
+  <audio id="bg-music" src="assets/sounds/bg-music.mp3" loop></audio>
+  <script src="script.js"></script>
+</body>
+</html>
