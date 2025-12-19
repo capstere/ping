@@ -92,8 +92,6 @@
   }
   closeWonderBtn?.addEventListener("click", closeWonder);
 
-
-  
   // ---------- Meta / Achievements / Mood ----------
   const META_KEY = "jesper_meta_v1";
   const SPEEDRUN_MS = 45000;          // confirmed
