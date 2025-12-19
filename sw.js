@@ -1,6 +1,6 @@
 // Simple offline cache (works on https or localhost)
 // Bumpa versionssträngen när du lägger till/byter assets så att mobilen får nya filer.
-const CACHE = "jesper-room-v7";
+const CACHE = "jesper-room-v8";
 const ASSETS = [
   "./",
   "./index.html",
