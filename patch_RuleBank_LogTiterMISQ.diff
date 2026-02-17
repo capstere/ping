@@ -1,0 +1,32 @@
+--- RuleBank.compiled.ps1
++++ RuleBank.LogTiterMISQ.patched.compiled.ps1
+@@ -6,6 +6,7 @@
+     SourceHash  = '83bec8c73471b6fd344f89f6fba616f445c4ff5908319aab357325d440c463bc'
+     Counts = @{
+       'ResultCallPatterns' = 187
++      'QuantSpecRules' = 10
+       'SampleExpectationRules' = 4
+       'ErrorCodes' = 23
+       'MissingSamplesConfig' = 1
+@@ -204,6 +205,21 @@
+   @{ 'Assay' = 'XP Flu-RSV RUO'; 'Call' = 'NEG'; 'MatchType' = 'EQUALS'; 'Pattern' = 'Flu A NEGATIVE;Flu B NEGATIVE;RSV NEGATIVE'; 'Note' = 'Spec FLU RSV SampleType 0'; 'Enabled' = 'TRUE'; 'Priority' = '9000' }
+   @{ 'Assay' = 'XP Flu-RSV RUO'; 'Call' = 'POS'; 'MatchType' = 'EQUALS'; 'Pattern' = 'Flu A POSITIVE;Flu B POSITIVE;RSV POSITIVE'; 'Note' = 'Spec FLU RSV SampleType 1'; 'Enabled' = 'TRUE'; 'Priority' = '9000' }
+ )
++  QuantSpecRules = @(
++  @{ 'AssayPattern' = 'Xpert HBV Viral Load'; 'MatchType' = 'EQUALS'; 'Call' = 'POS'; 'ControlCode' = '1'; 'Metric' = 'LogTiter'; 'Min' = '0.88'; 'Max' = '2.08'; 'FailMode' = 'OUTSIDE_OR_EQUAL'; 'OnFailErrorCode' = 'MISQUANTITATION'; 'OnFailDeviation' = 'MISQ'; 'OnFailErrorName' = 'Misquantitation (Log titer outside spec)'; 'OnFailGeneratesRetest' = 'N/A'; 'Enabled' = 'TRUE'; 'Priority' = '9000'; 'Note' = 'HBV VL PC1: MISQ if log <=0.88 or >=2.08' }
++
++  @{ 'AssayPattern' = 'HIV-1 Viral Load XC IUO'; 'MatchType' = 'EQUALS'; 'Call' = 'POS'; 'ControlCode' = '1'; 'Metric' = 'LogTiter'; 'Min' = '1.70'; 'Max' = '2.90'; 'FailMode' = 'OUTSIDE_OR_EQUAL'; 'OnFailErrorCode' = 'MISQUANTITATION'; 'OnFailDeviation' = 'MISQ'; 'OnFailErrorName' = 'Misquantitation (Log titer outside spec)'; 'OnFailGeneratesRetest' = 'N/A'; 'Enabled' = 'TRUE'; 'Priority' = '9000'; 'Note' = 'HIV-1 PC1 log spec' }
++  @{ 'AssayPattern' = 'HIV-1 Viral Load XC RUO'; 'MatchType' = 'EQUALS'; 'Call' = 'POS'; 'ControlCode' = '1'; 'Metric' = 'LogTiter'; 'Min' = '1.70'; 'Max' = '2.90'; 'FailMode' = 'OUTSIDE_OR_EQUAL'; 'OnFailErrorCode' = 'MISQUANTITATION'; 'OnFailDeviation' = 'MISQ'; 'OnFailErrorName' = 'Misquantitation (Log titer outside spec)'; 'OnFailGeneratesRetest' = 'N/A'; 'Enabled' = 'TRUE'; 'Priority' = '9000'; 'Note' = 'HIV-1 PC1 log spec' }
++  @{ 'AssayPattern' = 'Xpert HIV-1 Viral Load XC'; 'MatchType' = 'EQUALS'; 'Call' = 'POS'; 'ControlCode' = '1'; 'Metric' = 'LogTiter'; 'Min' = '1.70'; 'Max' = '2.90'; 'FailMode' = 'OUTSIDE_OR_EQUAL'; 'OnFailErrorCode' = 'MISQUANTITATION'; 'OnFailDeviation' = 'MISQ'; 'OnFailErrorName' = 'Misquantitation (Log titer outside spec)'; 'OnFailGeneratesRetest' = 'N/A'; 'Enabled' = 'TRUE'; 'Priority' = '9000'; 'Note' = 'HIV-1 PC1 log spec' }
++  @{ 'AssayPattern' = 'Xpert_HIV-1 Viral Load'; 'MatchType' = 'EQUALS'; 'Call' = 'POS'; 'ControlCode' = '1'; 'Metric' = 'LogTiter'; 'Min' = '1.70'; 'Max' = '2.90'; 'FailMode' = 'OUTSIDE_OR_EQUAL'; 'OnFailErrorCode' = 'MISQUANTITATION'; 'OnFailDeviation' = 'MISQ'; 'OnFailErrorName' = 'Misquantitation (Log titer outside spec)'; 'OnFailGeneratesRetest' = 'N/A'; 'Enabled' = 'TRUE'; 'Priority' = '9000'; 'Note' = 'HIV-1 PC1 log spec' }
++  @{ 'AssayPattern' = 'HIV-1 Viral Load RUO'; 'MatchType' = 'EQUALS'; 'Call' = 'POS'; 'ControlCode' = '1'; 'Metric' = 'LogTiter'; 'Min' = '1.70'; 'Max' = '2.90'; 'FailMode' = 'OUTSIDE_OR_EQUAL'; 'OnFailErrorCode' = 'MISQUANTITATION'; 'OnFailDeviation' = 'MISQ'; 'OnFailErrorName' = 'Misquantitation (Log titer outside spec)'; 'OnFailGeneratesRetest' = 'N/A'; 'Enabled' = 'TRUE'; 'Priority' = '9000'; 'Note' = 'HIV-1 PC1 log spec' }
++
++  @{ 'AssayPattern' = 'Xpert_HCV Viral Load'; 'MatchType' = 'EQUALS'; 'Call' = 'POS'; 'ControlCode' = '1'; 'Metric' = 'LogTiter'; 'Min' = '1.10'; 'Max' = '2.30'; 'FailMode' = 'OUTSIDE_OR_EQUAL'; 'OnFailErrorCode' = 'MISQUANTITATION'; 'OnFailDeviation' = 'MISQ'; 'OnFailErrorName' = 'Misquantitation (Log titer outside spec)'; 'OnFailGeneratesRetest' = 'N/A'; 'Enabled' = 'TRUE'; 'Priority' = '9000'; 'Note' = 'HCV PC1 log spec' }
++  @{ 'AssayPattern' = 'HCV Viral Load RUO'; 'MatchType' = 'EQUALS'; 'Call' = 'POS'; 'ControlCode' = '1'; 'Metric' = 'LogTiter'; 'Min' = '1.10'; 'Max' = '2.30'; 'FailMode' = 'OUTSIDE_OR_EQUAL'; 'OnFailErrorCode' = 'MISQUANTITATION'; 'OnFailDeviation' = 'MISQ'; 'OnFailErrorName' = 'Misquantitation (Log titer outside spec)'; 'OnFailGeneratesRetest' = 'N/A'; 'Enabled' = 'TRUE'; 'Priority' = '9000'; 'Note' = 'HCV PC1 log spec' }
++
++  @{ 'AssayPattern' = 'Xpert HCV VL Fingerstick'; 'MatchType' = 'EQUALS'; 'Call' = 'POS'; 'ControlCode' = '1'; 'Metric' = 'LogTiter'; 'Min' = '1.88'; 'Max' = '3.08'; 'FailMode' = 'OUTSIDE_OR_EQUAL'; 'OnFailErrorCode' = 'MISQUANTITATION'; 'OnFailDeviation' = 'MISQ'; 'OnFailErrorName' = 'Misquantitation (Log titer outside spec)'; 'OnFailGeneratesRetest' = 'N/A'; 'Enabled' = 'TRUE'; 'Priority' = '9000'; 'Note' = 'HCV Fingerstick PC1 log spec' }
++  @{ 'AssayPattern' = 'HCV VL WB RUO'; 'MatchType' = 'EQUALS'; 'Call' = 'POS'; 'ControlCode' = '1'; 'Metric' = 'LogTiter'; 'Min' = '1.88'; 'Max' = '3.08'; 'FailMode' = 'OUTSIDE_OR_EQUAL'; 'OnFailErrorCode' = 'MISQUANTITATION'; 'OnFailDeviation' = 'MISQ'; 'OnFailErrorName' = 'Misquantitation (Log titer outside spec)'; 'OnFailGeneratesRetest' = 'N/A'; 'Enabled' = 'TRUE'; 'Priority' = '9000'; 'Note' = 'HCV WB PC1 log spec' }
++)
+   SampleExpectationRules = @( 
+   @{ 'Assay' = '*'; 'SampleIdMatchType' = 'REGEX'; 'SampleIdPattern' = '^[^_]+_[^_]+_0_'; 'Expected' = 'NEG'; 'Note' = 'Token2=0 => Negative Control (expected NEG)'; 'Enabled' = 'TRUE'; 'Priority' = '9000' }
+   @{ 'Assay' = '*'; 'SampleIdMatchType' = 'REGEX'; 'SampleIdPattern' = '^[^_]+_[^_]+_[1-5]_'; 'Expected' = 'POS'; 'Note' = 'Token2=1-5 => Positive Control (expected POS)'; 'Enabled' = 'TRUE'; 'Priority' = '8990' }
