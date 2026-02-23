@@ -1,0 +1,150 @@
+--- /mnt/data/Main_orig.ps1	2026-02-23 14:25:56.559053987 +0000
++++ /mnt/data/ipt163/IPTCompile_16/Main.ps1	2026-02-23 14:25:25.823262052 +0000
+@@ -2538,6 +2538,52 @@
+         $mismatchFields = $fields[0..6] | ForEach-Object { $_.Label }
+ 
+ 
++        function _Clean-SealText([string]$s) {
++            if ($null -eq $s) { return '' }
++            $t = ('' + $s)
++            # normalisera "osynliga" mellanslag (NBSP) + trimma
++            $t = $t -replace [char]0x00A0, ' '
++            $t = $t.Trim()
++
++            # Excel kan lägga ett inledande apostrof för att tvinga text (t.ex. '003070)
++            $t = $t.TrimStart("'", "’")
++
++            # kollapsa multipla whitespace till ett mellanslag
++            $t = ($t -replace '\s+', ' ').Trim()
++            return $t
++        }
++
++        function _Norm-SealCompare([string]$label, [string]$s) {
++            # jämförelse-normalisering: ignorera case, apostrof, extra mellanslag
++            $t = _Clean-SealText $s
++            return $t.ToUpperInvariant()
++        }
++
++        function _Set-SealMismatchCell {
++            param(
++                [OfficeOpenXml.ExcelWorksheet]$Ws,
++                [int]$Row,
++                [string]$StatusText,
++                [string]$BgHex,
++                [string]$FontHex
++            )
++            $c = $Ws.Cells["D$Row"]
++            $c.Value = $StatusText
++            $c.Style.WrapText = $true
++            Style-Cell $c $true $BgHex "Medium" $FontHex
++            try {
++                # ge lite extra höjd när vi har flera rader text
++                if ($StatusText -match "\r\n|\n") {
++                    $Ws.Row($Row).CustomHeight = $true
++                    if ($Ws.Row($Row).Height -lt 45) { $Ws.Row($Row).Height = 45 }
++                } else {
++                    $Ws.Row($Row).CustomHeight = $false
++                }
++            } catch {}
++        }
++
++
++
+             # --- Förväntad utrustningslista (valfritt, från equipment.xml) ---
+         $equip = $null
+         $equipPath = $null
+@@ -2669,6 +2715,7 @@
+         $row = 3
+         foreach ($f in $fields) {
+ $valNeg=''; $valPos=''
++$srcNeg=''; $srcPos=''
+ 
+ # För utrustningsrader: samla per flik (inte avbrott på första!)
+ $perNeg = $null
+@@ -2694,21 +2741,25 @@
+     }
+ }
+ else {
+-    # Befintligt beteende för "vanliga" fält: första flik med värde
++    # Befintligt beteende för "vanliga" fält: första flik med värde (men spåra vilken flik som gav värdet)
++    $srcNeg = ''
+     foreach ($wsN in $pkgNeg.Workbook.Worksheets) {
+         if ($wsN.Name -eq "Worksheet Instructions") { continue }
+         $cell = $wsN.Cells[$f.Cell]
+         if ($cell.Value -ne $null) {
+             if ($cell.Value -is [datetime]) { $valNeg = $cell.Value.ToString('MMM-yy') } else { $valNeg = $cell.Text }
++            $srcNeg = $wsN.Name
+             break
+         }
+     }
+ 
++    $srcPos = ''
+     foreach ($wsP in $pkgPos.Workbook.Worksheets) {
+         if ($wsP.Name -eq "Worksheet Instructions") { continue }
+         $cell = $wsP.Cells[$f.Cell]
+         if ($cell.Value -ne $null) {
+             if ($cell.Value -is [datetime]) { $valPos = $cell.Value.ToString('MMM-yy') } else { $valPos = $cell.Text }
++            $srcPos = $wsP.Name
+             break
+         }
+     }
+@@ -2726,22 +2777,45 @@
+             $wsOut1.Cells["C$row"].Style.Border.Left.Style  = "Medium"
+ 
+         if ($mismatchFields -contains $f.Label) {
+-                # D3:D9: visa tydlig Match/Mismatch med symboler
+-                if ($valNeg -and $valPos) {
+-                    if ($valNeg -ne $valPos) {
+-                        $wsOut1.Cells["D$row"].Value = "⚠ Mismatch"
+-                        Style-Cell $wsOut1.Cells["D$row"] $true "FF0000" "Medium" "FFFFFF"
+-                        Gui-Log "⚠️ Avvikelse: $($f.Label) (NEG='$valNeg' vs POS='$valPos')"
+-                    } else {
+-                        $wsOut1.Cells["D$row"].Value = "✓ Match"
+-                        Style-Cell $wsOut1.Cells["D$row"] $true "C6EFCE" "Medium" "006100"
+-                    }
+-                } elseif ($valNeg -or $valPos) {
+-                    # Bara en av filerna har värde - markera som varning
+-                    $wsOut1.Cells["D$row"].Value = "⚠ Saknas"
+-                    Style-Cell $wsOut1.Cells["D$row"] $true "FFE699" "Medium" "806000"
++            # D3:D9: robust Match/Mismatch (ignorera extra mellanslag + inledande apostrof + case)
++            $dispNeg = _Clean-SealText $valNeg
++            $dispPos = _Clean-SealText $valPos
++            $wsOut1.Cells["B$row"].Value = $dispNeg
++            $wsOut1.Cells["C$row"].Value = $dispPos
++
++            $nNeg = _Norm-SealCompare $f.Label $dispNeg
++            $nPos = _Norm-SealCompare $f.Label $dispPos
++
++            if ($nNeg -and $nPos) {
++                if ($nNeg -ne $nPos) {
++                    # markera även B/C så ögat direkt ser var mismatchen är
++                    try {
++                        foreach ($col in @('B','C')) {
++                            $x = $wsOut1.Cells["${col}$row"]
++                            $x.Style.Fill.PatternType = [OfficeOpenXml.Style.ExcelFillStyle]::Solid
++                            $x.Style.Fill.BackgroundColor.SetColor([System.Drawing.ColorTranslator]::FromHtml('#FFB3B3'))
++                        }
++                    } catch {}
++
++                    $whereNeg = if ($srcNeg) { ("NEG: " + $srcNeg + " (" + $f.Cell + ")") } else { ("NEG (" + $f.Cell + ")") }
++                    $wherePos = if ($srcPos) { ("POS: " + $srcPos + " (" + $f.Cell + ")") } else { ("POS (" + $f.Cell + ")") }
++
++                    $msg = "⚠ Mismatch`n$whereNeg: $dispNeg`n$wherePos: $dispPos"
++                    _Set-SealMismatchCell -Ws $wsOut1 -Row $row -StatusText $msg -BgHex 'FF0000' -FontHex 'FFFFFF'
++
++                    Gui-Log "⚠️ Avvikelse: $($f.Label) (NEG='$dispNeg' vs POS='$dispPos')"
++                } else {
++                    _Set-SealMismatchCell -Ws $wsOut1 -Row $row -StatusText '✓ Match' -BgHex 'C6EFCE' -FontHex '006100'
+                 }
+             }
++            elseif ($nNeg -or $nPos) {
++                $whereNeg = if ($srcNeg) { ("NEG: " + $srcNeg + " (" + $f.Cell + ")") } else { ("NEG (" + $f.Cell + ")") }
++                $wherePos = if ($srcPos) { ("POS: " + $srcPos + " (" + $f.Cell + ")") } else { ("POS (" + $f.Cell + ")") }
++
++                $msg = "⚠ Saknas`n$whereNeg: $dispNeg`n$wherePos: $dispPos"
++                _Set-SealMismatchCell -Ws $wsOut1 -Row $row -StatusText $msg -BgHex 'FFE699' -FontHex '806000'
++            }
++        }
+ 
+ 
+             # --- Utrustningskontroll (POS/NEG har egna tillåtna värden i equipment.xml) ---
