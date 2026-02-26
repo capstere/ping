@@ -2,7 +2,6 @@
 param([Parameter(Mandatory)][string]$Path)
 if (-not (Test-Path -LiteralPath $Path)) { return @() }
 
-
 $delim = ','
 try { $delim = Get-CsvDelimiter -Path $Path } catch {}
 
