@@ -1,0 +1,59 @@
+
+
+Din senaste zip-fil med projektet blev ett haveri :(
+Jag bifogar GUI-log och error-koder.
+
+ 
+[18:22:19]  🔎 Söker filer för 18901…
+[18:22:19]  📂 Mapp: R12 - EBOLA #18901 - PQC (2,100)
+[18:22:19]  ❌ Filsökning misslyckades: The property 'Count' cannot be found on this object. Verify that the property exists.
+[18:22:42]  🔃 Skapar rapport…
+[18:22:46]  📄 Neg: 2025 10 08 EBOLA 18901 Seal Test Neg.xlsx
+[18:22:46]  📄 Pos: 2025 10 08 EBOLA 18901 Seal Test Pos.xlsx
+[18:22:46]  📄 CSV: 2025 10 08 EBOLA #18901_Tests Summary.csv
+[18:22:51]  🖊️ Signatur satt: NEG 0 blad (överhoppade 5), POS 0 blad (överhoppade 5).
+[18:22:59]  ⚠️ Kunde inte signera Worksheet: Kunde inte ladda OpenXML DLL: C:\Users\jesper.fredriksson\OneDrive - Danaher\Desktop\ping-main\IPTCompile_PATCHED\Modules\DocumentFormat.OpenXml.dll
+Exception calling "LoadFrom" with "1" argument(s): "Could not load file or assembly 'file:///C:\Users\jesper.fredriksson\OneDrive - Danaher\Desktop\ping-main\IPTCompile_PATCHED\Modules\DocumentFormat.OpenXml.dll' or one of its dependencies. Operation is not supported. (Exception from HRESULT: 0x80131515)"
+[18:22:59]  🔎 Assay från CSV: Xpert Ebola EUA
+[18:23:00]  ⚠️ RuleEngine (shadow) fel: The property 'ErrorCodes' cannot be found on this object. Verify that the property exists.
+[18:23:00]  🧪 Kontrollmaterial-flik: EBOLA
+[18:23:01]  ❗ 0 avvikelser i NEG, 1 i POS
+[18:23:02]  ⚠️ Get-CsvStats: The property 'Count' cannot be found on this object. Verify that the property exists.
+[18:23:04]  ⚠️ Fel vid extraktion av LSP från CSV: The property 'Count' cannot be found on this object. Verify that the property exists.
+[18:23:05]  🔎 Worksheet: 2025 10 08 EBOLA 18901 Worksheet D21938.xlsx
+[18:23:06]  ⚠️ Header summary fel: The property 'PartNumber' cannot be found on this object. Verify that the property exists.
+[18:23:07]  🔎 Batch hittad: 1001503076
+[18:23:11]  📄 SharePoint-post hittad – skriver blad.
+[18:23:11]  💾 Sparar rapport: jesper.fredriksson_output_18901_20260226_182311.xlsx
+[18:23:11]  🧠 Regelmotor: saknas vid Save → bygger nu...
+[18:23:11]  ⚠️ Kunde inte skriva CSV-Sammanfattning: The property 'ErrorCodes' cannot be found on this object. Verify that the property exists.
+[18:23:11]   Rapport sparad: C:\Users\JESPER~1.FRE\AppData\Local\Temp\jesper.fredriksson_output_18901_20260226_182311.xlsx (29.5s)
+
+ERROR:
+The variable '$Primary' cannot be retrieved because it has not been set.
+At C:\Users\jesper.fredriksson\OneDrive - Danaher\Desktop\ping-main\IPTCompile_PATCHED\Modules\UiStyling.ps1:81 char:17
++             if ($Primary) {
++                 ~~~~~~~~
+    + CategoryInfo          : InvalidOperation: (Primary:String) [], RuntimeException
+    + FullyQualifiedErrorId : VariableIsUndefined
+ 
+The property 'Count' cannot be found on this object. Verify that the property exists.
+At C:\Users\jesper.fredriksson\OneDrive - Danaher\Desktop\ping-main\IPTCompile_PATCHED\Main.ps1:3085 char:17
++             if ($aT.Count -eq 0) { return 'Saknas' }
++                 ~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (:) [], PropertyNotFoundException
+    + FullyQualifiedErrorId : PropertyNotFoundStrict
+
+
+
+Tror du att du kan fixa det och även visa hur jag ska lägga in DOcumentFormat.OpenXML.dll-modulen? Behöver jag göra något sånt här?
+
+    try{
+        $base64 = Get-Content -Path "\\SE.CEPHEID.PRI\Cepheid Sweden\QC\QC-1\IPT\Skiftspecifika dokument\PQC analyst\JESPER\IPTCompile_PATCHED\ModulesOpen\XMLAssembly.txt"
+        $bits = [Convert]::FromBase64String($base64)
+        [System.Reflection.Assembly]::Load($bits) | Out-Null
+    }
+
+
+ELler blir det för mycket jobb? Det enda jag vill är att kunna signera Worksheet på ett säkert sätt!
+Tack!
