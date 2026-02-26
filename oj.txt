@@ -1,0 +1,23 @@
+
+[19:34:24]  🔎 Söker filer för 14701…
+[19:34:24]  📂 Mapp: R8 - CARBA #14701 - PQC (30,000)
+[19:34:26]  ✅ Filer laddade.
+[19:35:06]  🔃 Skapar rapport…
+[19:35:09]  📄 Neg: 2026 02 16 CARBA 14701 Seal Test Neg.xlsx
+[19:35:09]  📄 Pos: 2026 02 16 CARBA 14701 Seal Test Pos.xlsx
+[19:35:09]  📄 CSV: 2026 02 16 CARBA 14701 Tests Summary.csv
+[19:35:14]  🖊️ Signatur satt: NEG 10 blad (överhoppade 0), POS 4 blad (överhoppade 0).
+[19:35:15]  🖊️ WS Sammanställning: Test Summary (namn+datum), Data Summary (namn+datum), Seal Test Failure Count (namn+datum), Statistical Process Control (namn+datum)
+[19:35:15]  ℹ️ WS Sammanställning – ej hittade flikar: Extra Data Summary, Resample Data Summary (ej resample), Vacuum Seal Data
+[19:35:17]  ✅ Worksheet-signatur sparad: 2026 02 16 CARBA 14701 Worksheet D18272.xlsx
+[19:35:17]  🔎 Assay från CSV: Xpert_Carba-R
+[19:35:19]  ⚠️ RuleEngine (shadow) fel: Cannot bind argument to parameter 'ErrorCodes' because it is null.
+[19:35:19]  🧪 Kontrollmaterial-flik: CARBA R
+[19:35:19]  ✅ Seal Test hittades
+[19:35:23]  🔎 Worksheet: 2026 02 16 CARBA 14701 Worksheet D18272.xlsx
+[19:35:25]  🔎 Batch hittad: 1001519417
+[19:35:28]  📄 SharePoint-post hittad – skriver blad.
+[19:35:28]  💾 Sparar rapport: jesper.fredriksson_output_14701_20260226_193528.xlsx
+[19:35:28]  🧠 Regelmotor: saknas vid Save → bygger nu...
+[19:35:29]  ⚠️ Kunde inte skriva CSV-Sammanfattning: Cannot bind argument to parameter 'ErrorCodes' because it is null.
+[19:35:29]   Rapport sparad: C:\Users\JESPER~1.FRE\AppData\Local\Temp\jesper.fredriksson_output_14701_20260226_193528.xlsx (22.7s)
