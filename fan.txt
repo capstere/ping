@@ -1,25 +1,27 @@
-Exempel från en körning, detta står i GUI.loggen:
+VAD ÄR FELET!?
 
-[22:19:04]  🔎 Söker filer för 92303…
-[22:19:04]  📂 Mapp: R6 - GXMTB RIF ULTRA 92303 - PQC (29,000)
-[22:19:06]  ✅ Filer laddade.
-[22:19:27]  🔃 Skapar rapport…
-[22:19:29]  📄 Neg: 2099 02 05 GXMTB RIF ULTRA 92303 Seal Test Neg.xlsx
-[22:19:29]  📄 Pos: 2099 02 05 GXMTB RIF ULTRA 92303 Seal Test Pos.xlsx
-[22:19:29]  📄 CSV: 2099 02 05 GXMTB RIF ULTRA 92303  Tests Summary.csv
-[22:20:04]  🖊️ Signatur satt: NEG 0 blad (överhoppade 5), POS 0 blad (överhoppade 5).
-[22:20:16]  ℹ️ WS Sammanställning – överhoppade: Test Summary (labels saknas eller redan ifyllt), Data Summary (labels saknas eller redan ifyllt), Extra Data Summary, Resample Date Summary (ej resample), Seal Test Failure Count, Statistical Process Control (labels saknas eller redan ifyllt), Vacuum Seal Data (labels saknas eller redan ifyllt)
-[22:20:16]  ✅ Worksheet-signatur sparad: 2099 02 05 GXMTB RIF ULTRA 92303 Worksheet D25862.xlsx
-[22:20:16]  🔎 Assay från CSV: Xpert MTB-RIF Ultra
-[22:20:18]  ⚠️ RuleEngine (shadow) fel: RuleEngine row-fel (Sample ID=B01NOV24B_03_2_19+): Argument types do not match
-[22:20:18]  🧪 Kontrollmaterial-flik: MTB ULTRA
-[22:20:19]  ⚠️ Avvikelse: Batch Number (NEG='1001506040' vs POS='1001506046')
-[22:20:19]  ⚠️ Avvikelse: Cartridge Number (LSP) (NEG='92302' vs POS='92303')
-[22:20:19]  ❗ 3 avvikelser i NEG, 2 i POS
-[22:20:23]  🔎 Worksheet: 2099 02 05 GXMTB RIF ULTRA 92303 Worksheet D25862.xlsx
-[22:20:26]  🔎 Batch hittad: 1001506046
-[22:20:29]  📄 SharePoint-post hittad – skriver blad.
-[22:20:29]  💾 Sparar rapport: jesper.fredriksson_output_92303_20260226_222029.xlsx
-[22:20:29]  🧠 Regelmotor: saknas vid Save → bygger nu...
-[22:20:29]  ⚠️ Kunde inte skriva CSV-Sammanfattning: RuleEngine row-fel (Sample ID=B01NOV24B_03_2_19+): Argument types do not match
-[22:20:29]   Rapport sparad: C:\Users\JESPER~1.FRE\AppData\Local\Temp\jesper.fredriksson_output_92303_20260226_222029.xlsx (62.0s)
+Körde ett test igen:
+
+[22:43:54]  🔎 Söker filer för 34314…
+[22:43:54]  📂 Mapp: R11 - XPRS COV2 PLEX #34314 - PQC (20,000)
+[22:43:56]  ✅ Filer laddade.
+[22:44:17]  🔃 Skapar rapport…
+[22:44:20]  📄 Neg: 2026 02 05 XPRS COV2 PLEX 34314 Seal Test Neg.xlsx
+[22:44:20]  📄 Pos: 2026 02 05 XPRS COV2 PLEX 34314 Seal Test Pos.xlsx
+[22:44:20]  📄 CSV: 2026 02 05 XPRS COV2 PLEX #34314 Tests Summary.csv
+[22:44:23]  🖊️ Signatur satt: NEG 0 blad (överhoppade 5), POS 0 blad (överhoppade 5).
+[22:44:30]  ℹ️ WS Sammanställning – överhoppade: Test Summary (labels saknas eller redan ifyllt), Data Summary (labels saknas eller redan ifyllt), Extra Data Summary, Resample Date Summary (ej resample), Seal Test Failure Count (labels saknas eller redan ifyllt), Statistical Process Control (labels saknas eller redan ifyllt), Vacuum Seal Data
+[22:44:30]  ✅ Worksheet-signatur sparad: 2026 02 05 XPRS COV2 PLEX 34314 Worksheet D47377.xlsx
+[22:44:30]  🔎 Assay från CSV: Xpress SARS-CoV-2 Flu RSV plus
+[22:44:32]  ⚠️ RuleEngine row skipped (Sample ID=NEG_04_0_07+): Argument types do not match
+[22:44:33]  ⚠️ RuleEngine (shadow) fel: The property 'Count' cannot be found on this object. Verify that the property exists.
+[22:44:33]  🧪 Kontrollmaterial-flik: FLUVID | FLUVID+
+[22:44:34]  ❗ 2 avvikelser i NEG, 0 i POS
+[22:44:37]  🔎 Worksheet: 2026 02 05 XPRS COV2 PLEX 34314 Worksheet D47377.xlsx
+[22:44:39]  🔎 Batch hittad: 1001518474
+[22:44:42]  📄 SharePoint-post hittad – skriver blad.
+[22:44:42]  💾 Sparar rapport: jesper.fredriksson_output_34314_20260226_224442.xlsx
+[22:44:42]  🧠 Regelmotor: saknas vid Save → bygger nu...
+[22:44:43]  ⚠️ RuleEngine row skipped (Sample ID=NEG_04_0_07+): Argument types do not match
+[22:44:43]  ⚠️ Kunde inte skriva CSV-Sammanfattning: The property 'Count' cannot be found on this object. Verify that the property exists.
+[22:44:43]   Rapport sparad: C:\Users\JESPER~1.FRE\AppData\Local\Temp\jesper.fredriksson_output_34314_20260226_224442.xlsx (26.4s)
