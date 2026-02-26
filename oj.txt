@@ -1,0 +1,21 @@
+[23:25:37]  🔎 Söker filer för 95102…
+[23:25:37]  📂 Mapp: 95102
+[23:25:39]  ✅ Filer laddade.
+[23:26:00]  🔃 Skapar rapport…
+[23:26:04]  📄 Neg: 2026 02 25 GXMTB RIF ULTRA 95102 Seal Test Neg.xlsx
+[23:26:04]  📄 Pos: 2026 02 25 GXMTB RIF ULTRA 95102 Seal Test Pos.xlsx
+[23:26:04]  📄 CSV: 2026 02 25 GXMTB RIF ULTRA #95102 Tests Summary_.csv
+[23:26:10]  🖊️ Signatur satt: NEG 5 blad (överhoppade 0), POS 5 blad (överhoppade 0).
+[23:26:16]  🖊️ WS Sammanställning: Test Summary, Data Summary, Statistical Process Control, Vacuum Seal Data
+[23:26:16]  ℹ️ WS Sammanställning – överhoppade: Extra Data Summary, Resample Date Summary (ej resample), Seal Test Failure Count
+[23:26:16]  ✅ Worksheet-signatur sparad: 2026 02 25 GXMTB RIF ULTRA 95102 Worksheet D25862.xlsx
+[23:26:17]  🔎 Assay från CSV: Xpert MTB-RIF Ultra
+[23:26:19]  ⚠️ RuleEngine row skipped (Sample ID=B27FEB25A_09_1_15+): Argument types do not match
+[23:26:19]  ⚠️ RuleEngine row skipped (Sample ID=NEG_02_0_06+): Argument types do not match
+[23:26:19]  🧪 Kontrollmaterial-flik: MTB ULTRA
+[23:26:20]  ✅ Seal Test hittades
+[23:26:25]  🔎 Worksheet: 2026 02 25 GXMTB RIF ULTRA 95102 Worksheet D25862.xlsx
+[23:26:27]  🔎 Batch hittad: 1001521383
+[23:26:30]  📄 SharePoint-post hittad – skriver blad.
+[23:26:30]  💾 Sparar rapport: jesper.fredriksson_output_95102_20260226_232630.xlsx
+[23:26:30]   Rapport sparad: C:\Users\JESPER~1.FRE\AppData\Local\Temp\jesper.fredriksson_output_95102_20260226_232630.xlsx (30.6s)
