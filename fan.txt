@@ -1,0 +1,25 @@
+Exempel från en körning, detta står i GUI.loggen:
+
+[22:19:04]  🔎 Söker filer för 92303…
+[22:19:04]  📂 Mapp: R6 - GXMTB RIF ULTRA 92303 - PQC (29,000)
+[22:19:06]  ✅ Filer laddade.
+[22:19:27]  🔃 Skapar rapport…
+[22:19:29]  📄 Neg: 2099 02 05 GXMTB RIF ULTRA 92303 Seal Test Neg.xlsx
+[22:19:29]  📄 Pos: 2099 02 05 GXMTB RIF ULTRA 92303 Seal Test Pos.xlsx
+[22:19:29]  📄 CSV: 2099 02 05 GXMTB RIF ULTRA 92303  Tests Summary.csv
+[22:20:04]  🖊️ Signatur satt: NEG 0 blad (överhoppade 5), POS 0 blad (överhoppade 5).
+[22:20:16]  ℹ️ WS Sammanställning – överhoppade: Test Summary (labels saknas eller redan ifyllt), Data Summary (labels saknas eller redan ifyllt), Extra Data Summary, Resample Date Summary (ej resample), Seal Test Failure Count, Statistical Process Control (labels saknas eller redan ifyllt), Vacuum Seal Data (labels saknas eller redan ifyllt)
+[22:20:16]  ✅ Worksheet-signatur sparad: 2099 02 05 GXMTB RIF ULTRA 92303 Worksheet D25862.xlsx
+[22:20:16]  🔎 Assay från CSV: Xpert MTB-RIF Ultra
+[22:20:18]  ⚠️ RuleEngine (shadow) fel: RuleEngine row-fel (Sample ID=B01NOV24B_03_2_19+): Argument types do not match
+[22:20:18]  🧪 Kontrollmaterial-flik: MTB ULTRA
+[22:20:19]  ⚠️ Avvikelse: Batch Number (NEG='1001506040' vs POS='1001506046')
+[22:20:19]  ⚠️ Avvikelse: Cartridge Number (LSP) (NEG='92302' vs POS='92303')
+[22:20:19]  ❗ 3 avvikelser i NEG, 2 i POS
+[22:20:23]  🔎 Worksheet: 2099 02 05 GXMTB RIF ULTRA 92303 Worksheet D25862.xlsx
+[22:20:26]  🔎 Batch hittad: 1001506046
+[22:20:29]  📄 SharePoint-post hittad – skriver blad.
+[22:20:29]  💾 Sparar rapport: jesper.fredriksson_output_92303_20260226_222029.xlsx
+[22:20:29]  🧠 Regelmotor: saknas vid Save → bygger nu...
+[22:20:29]  ⚠️ Kunde inte skriva CSV-Sammanfattning: RuleEngine row-fel (Sample ID=B01NOV24B_03_2_19+): Argument types do not match
+[22:20:29]   Rapport sparad: C:\Users\JESPER~1.FRE\AppData\Local\Temp\jesper.fredriksson_output_92303_20260226_222029.xlsx (62.0s)
