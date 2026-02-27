@@ -1,0 +1,24 @@
+*Undantag, ej för Xpert MTB/RIF och Xpert MTB Ultra OBR med P/N 700-5208, 700-5288, 700-9287 och 700-6609
+
+
+Jag har fixat det som var problemet.
+Skickar zip-filen: IPTCompile_STABIL
+
+Kan du:
+
+- Bekräfta att mina ändringar är robusta.
+
+2. 
+
+GUI:
+- Nu kör jag på SharePoint automatisk anslutning (användarna gillar det mest) - Går det att ladda in så att "Date:" för "Signering - Sammanställning" autopopuleras med batchinformationen "'ROBAL - Actual start date/time'" med "$shortDateFields = @('BBD/SLED')" som även skrivs i Run Information? Användare kan själklart ändra, men det vore coolt!
+- Kan du lägga checkboxrutorna vid "Signering - Sammanställning" på bredden istället för på rad eftersom nu syns inte all text? Att dom ligger såhär istället:
+☐ Signera Seal Test (NEG+POS)	☐ Signera Worksheet (Sammanställning)	☐ Tillåt överskrivning
+- Kan du göra samma för "Signering - Granskning"? Att det blir såhär:
+☐ Signera Worksheet (Sammanställning)	☐ Tillåt överskrivning
+- Kan du även fixa så att "dialogrutorna" blir snyggare när man bekräftar olika signeringar i GUI?
+- I verktyg: Kan du även fixa så att när man trycker på "Aktivera signering (granskning)" men redan har aktiverat "Aktivera signering (sammanställning)" så döljs den andra automatisk och vice versa? Annars blir GUI-konstigt!
+- Kan du göra så att användare kan trycka på enter för att "Skapa" rapport när dom är i "signering-rutorna"?
+
+Output-Rapporten
+- Flik: "Seal Test Info" Kan du justera flikens logik för kolumn D och E lite - relaterat till ifall "NEG ✓ Delvis" och/eller "POS ✓ Delvis" så att Delvis också skriver ut vilken flik det inte stämmer på? (som vid mismatch till exempel)
