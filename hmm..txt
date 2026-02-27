@@ -1,8 +1,0 @@
-Jag har testat lite mer.
-
-Jag testade att köra skriptet mot HPV Vl och mot MTB Ultra.
-Det gick bra, men när jag körde MTB Ultra så fick detta i GUI-logen:
-
-RuleEngine row skipped (Sample ID=NEG_02_0_07+ @line 1626): Argument types do not match [At C:\Users\jesper.fredriksson\OneDrive - Danaher\Desktop\FINAL\IPTCompile_3FINAL\Modules\RuleEngine.ps1:1626 char:24 + ...  $errInfo = Get-ErrorInfo -Row $row -ErrorLut $errLut -DelamPattern $ ... +                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~]
-
-Men full rapport skapades. Men jag vill helst inte ha sådana fel, vad kan detta fel bero på?
