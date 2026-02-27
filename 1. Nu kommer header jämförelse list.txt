@@ -1,0 +1,40 @@
+1. Nu kommer header "jämförelse listan upp i kolumn C"
+2. Jag får fortfarande error. Detta är mycket konstigt - jag fick aldrig sådana här error innan vi introducerade OpenXML. (Bör vi ENDAST använda OpenXML vid all form av signering? Är det NÅGOT SOM KROCKAR med EPPlus 4.5.3.3 eller vad är det?)
+3. Signatur kan inte skrivas til worksheet fortfarande.
+4. Nu har Intrument error försvunnit från QC Summary output-rapporten och finns inte med :( Säkert fler saker, men det såg jag direkt.
+
+Här är GUI-för min senaste tesning:
+[07:35:32]  🔎 Söker filer för 95102…
+[07:35:32]  📂 Mapp: 95102
+[07:35:33]  ✅ Filer laddade.
+[07:35:49]  🔃 Skapar rapport…
+[07:35:50]  📥 Snapshot → TEMP: SealNEG__2026 02 25 GXMTB RIF ULTRA 95102 Seal Test Neg.xlsx
+[07:35:50]  📥 Snapshot → TEMP: SealPOS__2026 02 25 GXMTB RIF ULTRA 95102 Seal Test Pos.xlsx
+[07:35:51]  📥 Snapshot → TEMP: CSV_Primary__2026 02 25 GXMTB RIF ULTRA #95102 Tests Summary_.csv
+[07:35:52]  📄 Neg: 2026 02 25 GXMTB RIF ULTRA 95102 Seal Test Neg.xlsx
+[07:35:52]  📄 Pos: 2026 02 25 GXMTB RIF ULTRA 95102 Seal Test Pos.xlsx
+[07:35:52]  📄 CSV: 2026 02 25 GXMTB RIF ULTRA #95102 Tests Summary_.csv
+[07:35:57]  🖊️ Signatur satt: NEG 5 blad (överhoppade 0), POS 5 blad (överhoppade 0).
+[07:36:04]  ℹ️ WS Sammanställning – överhoppade: Test Summary (redan ifyllt), Data Summary (redan ifyllt), Extra Data Summary, Resample Date Summary (ej resample), Seal Test Failure Count, Statistical Process Control (redan ifyllt), Vacuum Seal Data (redan ifyllt)
+[07:36:04]  ✅ Worksheet-signatur sparad: 2026 02 25 GXMTB RIF ULTRA 95102 Worksheet D25862.xlsx
+[07:36:04]  🔃 CSV sorterad på kolumn C (Sample ID). Rader: 211
+[07:36:04]  🔎 Assay från CSV: Xpert MTB-RIF Ultra
+[07:36:06]  🧠 RuleBank laddad från compiled. ResultCallPatterns=187, QuantSpecRules=15, SampleExpectationRules=4, ErrorCodes=23, MissingSamplesConfig=1, SampleIdMarkers=5, ParityCheckConfig=5, SampleNumberRules=111, TestTypePolicy=91
+[07:36:06]  🧠 Regelmotor: CSV-källa: Import-CsvRows (211)
+[07:36:07]  ⚠️ RuleEngine row skipped (Sample ID=B27FEB25A_09_1_15+ @line 1626): Argument types do not match [At C:\Users\jesper.fredriksson\OneDrive - Danaher\Desktop\IPTCompile_PATCHED10\Modules\RuleEngine.ps1:1626 char:24 + ...  $errInfo = Get-ErrorInfo -Row $row -ErrorLut $errLut -DelamPattern $ ... +                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~]
+[07:36:07]  ⚠️ RuleEngine row skipped (Sample ID=NEG_02_0_06+ @line 1626): Argument types do not match [At C:\Users\jesper.fredriksson\OneDrive - Danaher\Desktop\IPTCompile_PATCHED10\Modules\RuleEngine.ps1:1626 char:24 + ...  $errInfo = Get-ErrorInfo -Row $row -ErrorLut $errLut -DelamPattern $ ... +                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~]
+[07:36:08]  ⚠️ RuleEngine dev: ERROR | B27FEB25A_10_1_15+ | Exp=POS | Obs=ERROR | Err=5002
+[07:36:08]  ⚠️ RuleEngine dev: ERROR | NEG_01_0_05X | Exp=NEG | Obs=ERROR | Err=5007
+[07:36:08]  🧪 Kontrollmaterial-flik: MTB ULTRA
+[07:36:08]  ✅ Seal Test hittades
+[07:36:12]  📥 Snapshot → TEMP: Worksheet__2026 02 25 GXMTB RIF ULTRA 95102 Worksheet D25862.xlsx
+[07:36:13]  🔎 Worksheet: 2026 02 25 GXMTB RIF ULTRA 95102 Worksheet D25862.xlsx
+[07:36:13]  ✅ Utrustningslista hämtad.
+[07:36:14]  ✅ Worksheet header korrekt
+[07:36:15]  ✅ Utrustningslista kopierad.
+[07:36:16]  ✅ Kontrollmaterial: 'MTB ULTRA'
+[07:36:16]  🔎 Batch hittad: 1001521383
+[07:36:19]  📄 SharePoint-post hittad – skriver blad.
+[07:36:19]  💾 Sparar rapport: jesper.fredriksson_output_95102_20260227_073619.xlsx
+[07:36:19]  🧠 Skriver CSV-Sammanfattning...
+[07:36:20]   Rapport sparad: C:\Users\JESPER~1.FRE\AppData\Local\Temp\jesper.fredriksson_output_95102_20260227_073619.xlsx (30.6s)
