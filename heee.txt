@@ -1,0 +1,14 @@
+﻿Jag får fortfarande detta i loggen och Rapport stoppas:
+
+[08:00:56]  🖊️ WS Sammanställning: Test Summary, Data Summary, Seal Test Failure Count, Statistical Process Control
+[08:00:59]  ❌ VERIFIERINGSFEL Worksheet: Test Summary C73: Förväntade='Jesper Fredriksson' Faktisk=''; Test Summary J73: Förväntade='20260228' Faktisk=''; Data Summary B334: Förväntade='Jesper Fredriksson' Faktisk=''; Data Summary D334: Förväntade='20260228' Faktisk=''; Seal Test Failure Count L31: Förväntade='Jesper Fredriksson' Faktisk=''; Seal Test Failure Count L35: Förväntade='20260228' Faktisk=''; Statistical Process Control L38: Förväntade='Jesper Fredriksson' Faktisk=''; Statistical Process Control L42: Förväntade='20260228' Faktisk=''
+[08:01:01]  🛑 Worksheet-signatur ej verifierad. Rapport stoppas.
+
+[08:04:47]  🖊️ WS Granskning: Test Summary
+[08:04:49]  ❌ VERIFIERINGSFEL Worksheet: Test Summary C75: Förväntade='Jesper Fredriksson' Faktisk=''; Test Summary J73: Förväntade='20000909' Faktisk=''
+[08:04:50]  🛑 Worksheet-signatur ej verifierad. Rapport stoppas.
+
+MEN! Jag ser att Worksheet-filerna jag testar mot "uppdateras" med tidsstämpel för alla scenarier. När jag sedan öppnar Worksheet där jag får hårt "Rapport Stoppas" så har det skrivits in både och Signatur och Datum är! Även om jag fått både "❌ VERIFIERINGSFEL Worksheet:" och "🛑 Worksheet-signatur ej verifierad. Rapport stoppas.". Men för det Worksheet som säger att det är ifyllt fast det är tomt fylls inte.
+
+Detta är kritiskt att det fungerar och inte stoppas. Kan du gå igenom och felsöka? Säkerställa att det fungerar är PRIO1! Behöver vi addera något? En till modul ClosedXML.dll? Eller vad är fel?
+TACK! 
