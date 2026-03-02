@@ -1,0 +1,31 @@
+--- OpenXmlHelpers.ps1 (before)
++++ OpenXmlHelpers.ps1 (after)
+@@ -401,6 +401,11 @@
+     )
+ 
+         Set-StrictMode -Version 2.0
++
++    # Deterministic bool for overwrite (avoid SwitchParameter edge cases)
++    $overwriteBool = $false
++    try { $overwriteBool = [bool]$Overwrite.IsPresent } catch { $overwriteBool = [bool]$Overwrite }
++
+ 
+     Import-OpenXmlSdk -ModulesRoot $ModulesRoot | Out-Null
+ 
+@@ -481,14 +486,14 @@
+ 
+             $wroteAny = $false
+             if ($nameRow) {
+-                $nameWritten = (Set-OpenXmlCellText -WorksheetPart $wsp -WorkbookPart $wbp -RowIndex ($nameRow + $t.Offset) -ColLetter $t.NameWriteCol -Value $FullName -Overwrite:$Overwrite)
++                $nameWritten = (Set-OpenXmlCellText -WorksheetPart $wsp -WorkbookPart $wbp -RowIndex ($nameRow + $t.Offset) -ColLetter $t.NameWriteCol -Value $FullName -Overwrite:$overwriteBool)
+                 if ($nameWritten) {
+                     [void]$res.WrittenCells.Add([pscustomobject]@{ Sheet=$sheetName; Row=($nameRow + $t.Offset); Col=$t.NameWriteCol; Value=$FullName })
+                 }
+                 $wroteAny = $nameWritten -or $wroteAny
+             }
+             if ($dateRow) {
+-                $dateWritten = (Set-OpenXmlCellText -WorksheetPart $wsp -WorkbookPart $wbp -RowIndex ($dateRow + $t.Offset) -ColLetter $t.DateWriteCol -Value $SignDateYmd -Overwrite:$Overwrite)
++                $dateWritten = (Set-OpenXmlCellText -WorksheetPart $wsp -WorkbookPart $wbp -RowIndex ($dateRow + $t.Offset) -ColLetter $t.DateWriteCol -Value $SignDateYmd -Overwrite:$overwriteBool)
+                 if ($dateWritten) {
+                     [void]$res.WrittenCells.Add([pscustomobject]@{ Sheet=$sheetName; Row=($dateRow + $t.Offset); Col=$t.DateWriteCol; Value=$SignDateYmd })
+                 }
