@@ -1,0 +1,973 @@
+Bra fråga. Jag vill tänka igenom det metodiskt istället för att gissa.
+Scenario 1 — Whitespace/newline-rester i etikett-celler
+Din regex använder ^...$-ankare. Om OpenXML returnerar "Recorded By:\r\n" eller "  Date:  " med whitespace matchar den inte, och cellen anses “ifylld”. Fix A bör ha en .Trim() före regex-matchningen:
+
+$existing = (Normalize-OpenXmlText (Get-OpenXmlCellText ...)).Trim()
+if ($existing -match '^(?i)(Recorded By:|Performed By:|PQC Reviewed By:|Date:)$') { $existing = '' }
+
+
+Om Normalize-OpenXmlText redan trimmar är det ofarligt men defensivt.
+Scenario 2 — Halvskriven signatur efter krasch
+Om en tidigare körning skrev namn i C73 men kraschade innan datum skrevs i C74, så ser nästa körning C73 som “ifylld” och hoppar över den — men C74 är tom och skrivs. Resultatet: namn från körning 1, datum från körning 2. Det bryter inte GDP-verifieringen (den kontrollerar bara att det du just skrev stämmer), men det är semantiskt inkonsekvent. Det här täcks av “Tillåt överskrivning”, men frågan är om verktyget borde detektera halvtillståndet och varna.
+Scenario 3 — Fler etikettextvarianter
+De fyra mönstren du har (Recorded By:, Performed By:, PQC Reviewed By:, Date:) — finns det fler i mallen? Exempelvis Reviewed By: utan “PQC”-prefix, eller Signature:, eller celler med bara : (kolon)? Det vore värt att öppna mallen och inventera alla celler som targets-tabellen pekar på.
+Scenario 4 — Merged cells i mallen
+Om någon target-cell ingår i en merged range kan OpenXML returnera tomt för den “sekundära” cellen (den som inte äger värdet). EPPlus hanterar merged cells annorlunda. Det här skulle ge en asymmetri: OpenXML skriver till vad den tror är rätt cell, EPPlus läser från merged-owner. Verifieringen misslyckas. Sannolikt inte fallet i din mall, men värt att verifiera en gång.
+
+Av dessa fyra bedömer jag Scenario 1 (trim före regex) som den enda som troligen kräver en kodändring. De övriga är “verifiera en gång”-saker. Vill du att jag tittar på den exakta Normalize-OpenXmlText-implementationen för att bekräfta?​​​​​​​​​​​​​​​​
+
+
+
+The user wants me to look at the actual Normalize-OpenXmlText implementation and also address merged cell handling in the OpenXML signing code. Let me read the relevant files.
+
+94:function Normalize-OpenXmlText {
+145:function Get-OpenXmlCellText {
+229:function Set-OpenXmlCellText {
+184:function Ensure-OpenXmlCell {
+462:function Find-OpenXmlCell {
+322:function Invoke-WorksheetSignature_OpenXml {
+
+
+
+<#
+OpenXML (DocumentFormat.OpenXml) helpers for PowerShell 5.1
+
+Goal: Update a few signature cells in Worksheet.xlsx WITHOUT saving the workbook through EPPlus.
+Some Worksheet templates contain definedNames/named ranges that EPPlus 4.5.3.3 may rewrite/remove,
+causing Excel repair: "Removed Records: Named range from /xl/workbook.xml".
+
+This module uses DocumentFormat.OpenXml to edit only the relevant sheet XML parts.
+
+DLL placement (recommended):
+  Modules\OpenXMLSDK\DocumentFormat.OpenXml.2.20.0\lib\net46\DocumentFormat.OpenXml.dll
+Fallback:
+  ...\lib\net40\DocumentFormat.OpenXml.dll
+Or simply place DocumentFormat.OpenXml.dll directly in Modules.
+
+Optional fallback #2:
+  Modules\OpenXMLAssembly.txt  (Base64-encoded bytes of DocumentFormat.OpenXml.dll)
+#>
+
+function Resolve-OpenXmlDllPath {
+    param(
+        [Parameter(Mandatory=$true)][string]$ModulesRoot
+    )
+
+    $candidates = New-Object System.Collections.Generic.List[string]
+
+    # Also allow LibRoot (Modules/Lib split)
+    try {
+        if ($global:LibRoot -and ($global:LibRoot -ne $ModulesRoot)) {
+            $lib = ($global:LibRoot + '')
+            if ($lib) {
+                $candidates.Add((Join-Path $lib 'DocumentFormat.OpenXml.dll')) | Out-Null
+            }
+        }
+    } catch {}
+
+    # 1) Directly in Modules
+    $candidates.Add((Join-Path $ModulesRoot 'DocumentFormat.OpenXml.dll'))
+
+    # 2) NuGet extracted layout (preferred)
+    $candidates.Add((Join-Path $ModulesRoot 'OpenXMLSDK\DocumentFormat.OpenXml.2.20.0\lib\net46\DocumentFormat.OpenXml.dll'))
+    $candidates.Add((Join-Path $ModulesRoot 'OpenXMLSDK\DocumentFormat.OpenXml.2.20.0\lib\net40\DocumentFormat.OpenXml.dll'))
+
+    # 3) Alternative layout
+    $candidates.Add((Join-Path $ModulesRoot 'OpenXMLSDK\lib\net46\DocumentFormat.OpenXml.dll'))
+    $candidates.Add((Join-Path $ModulesRoot 'OpenXMLSDK\lib\net40\DocumentFormat.OpenXml.dll'))
+
+    foreach ($p in $candidates) {
+        if (Test-Path -LiteralPath $p) { return $p }
+    }
+    return $null
+}
+
+function Import-OpenXmlSdk {
+    param(
+        [Parameter(Mandatory=$true)][string]$ModulesRoot
+    )
+
+    # Already loaded?
+    if ([AppDomain]::CurrentDomain.GetAssemblies() | Where-Object { $_.GetName().Name -eq 'DocumentFormat.OpenXml' }) {
+        return $true
+    }
+
+    # Try .dll on disk first
+    $dllPath = Resolve-OpenXmlDllPath -ModulesRoot $ModulesRoot
+    if ($dllPath -and (Test-Path -LiteralPath $dllPath)) {
+        try {
+            $bytes = [System.IO.File]::ReadAllBytes($dllPath)   # Bypasses MOTW
+            [void][System.Reflection.Assembly]::Load($bytes)
+            return $true
+        } catch {
+            throw "Kunde inte ladda OpenXML DLL: $dllPath`n$($_.Exception.Message)"
+        }
+    }
+
+    # Optional fallback: Base64-encoded DLL as text file
+    $b64Path = $null
+    try { if ($global:LibRoot) { $b64Path = Join-Path $global:LibRoot 'OpenXMLAssembly.txt' } } catch {}
+    if (-not $b64Path) { $b64Path = Join-Path $ModulesRoot 'OpenXMLAssembly.txt' }
+    if (Test-Path -LiteralPath $b64Path) {
+        try {
+            $base64 = Get-Content -LiteralPath $b64Path -Raw
+            $bytes  = [Convert]::FromBase64String($base64)
+            [void][System.Reflection.Assembly]::Load($bytes)
+            return $true
+        } catch {
+            throw "Kunde inte ladda OpenXML DLL från Base64 ($b64Path):`n$($_.Exception.Message)"
+        }
+    }
+
+    throw "DocumentFormat.OpenXml.dll hittades inte i Lib/Modules (eller Base64-fallback). Lägg den i Modules eller i Modules\OpenXMLSDK\... (net46 föredras, net40 fallback) eller placera OpenXMLAssembly.txt."
+}
+
+function Normalize-OpenXmlText {
+    param([string]$Text)
+    $t = ($Text + '')
+    $t = $t -replace [char]0x00A0,' '
+    $t = $t.Trim()
+    $t = [regex]::Replace($t,'\s+',' ')
+    return $t
+}
+
+function Get-OpenXmlChildrenOfType {
+    param(
+        [Parameter(Mandatory=$true)]$Parent,
+        [Parameter(Mandatory=$true)][Type]$Type
+    )
+    if (-not $Parent) { return @() }
+    $out = New-Object System.Collections.Generic.List[object]
+    try {
+        foreach ($ch in $Parent.ChildElements) {
+            if ($ch -is $Type) { $out.Add($ch) }
+        }
+    } catch {}
+    return $out
+}
+
+function Get-OpenXmlDescendantsOfType {
+    param(
+        [Parameter(Mandatory=$true)]$Parent,
+        [Parameter(Mandatory=$true)][Type]$Type
+    )
+    if (-not $Parent) { return @() }
+    $out = New-Object System.Collections.Generic.List[object]
+    try {
+        foreach ($d in $Parent.Descendants()) {
+            if ($d -is $Type) { $out.Add($d) }
+        }
+    } catch {}
+    return $out
+}
+
+function Convert-ColLetterToIndex {
+    param([string]$Col)
+    $c = ($Col + '').Trim().ToUpperInvariant()
+    if (-not $c) { return 0 }
+    $sum = 0
+    foreach ($ch in $c.ToCharArray()) {
+        if ($ch -lt 'A' -or $ch -gt 'Z') { return 0 }
+        $sum = ($sum * 26) + ([int][char]$ch - [int][char]'A' + 1)
+    }
+    return $sum
+}
+
+function Parse-CellReference {
+    <#
+    .SYNOPSIS  Splittar "C73" → @{ Col='C'; Row=73 }
+    #>
+    param([string]$Ref)
+    $r = ($Ref + '').Trim()
+    if ($r -match '^([A-Z]+)(\d+)$') {
+        return @{ Col = $Matches[1]; Row = [int]$Matches[2] }
+    }
+    return $null
+}
+
+function Get-MergeCellMap {
+    <#
+    .SYNOPSIS
+        Bygger en hashtable som mappar VARJE cell i en merge-range till dess owner (top-left).
+        Nyckel = "C73", Värde = @{ Col='B'; Row=73 }  (om B73:C73 är mergad)
+        Kallar bara en gång per WorksheetPart, cachar inte — kalla vid behov.
+    #>
+    param(
+        [Parameter(Mandatory=$true)]$WorksheetPart
+    )
+    $map = @{}
+    $ws = $WorksheetPart.Worksheet
+    if (-not $ws) { return $map }
+
+    $mergeCellsContainer = (Get-OpenXmlChildrenOfType -Parent $ws -Type ([DocumentFormat.OpenXml.Spreadsheet.MergeCells]))[0]
+    if (-not $mergeCellsContainer) { return $map }
+
+    foreach ($mc in (Get-OpenXmlChildrenOfType -Parent $mergeCellsContainer -Type ([DocumentFormat.OpenXml.Spreadsheet.MergeCell]))) {
+        $ref = ($mc.Reference + '').Trim()
+        if (-not $ref -or $ref -notmatch ':') { continue }
+        $parts = $ref -split ':'
+        $topLeft  = Parse-CellReference $parts[0]
+        $botRight = Parse-CellReference $parts[1]
+        if (-not $topLeft -or -not $botRight) { continue }
+
+        $ownerCol = $topLeft.Col
+        $ownerRow = $topLeft.Row
+        $startColIdx = Convert-ColLetterToIndex -Col $topLeft.Col
+        $endColIdx   = Convert-ColLetterToIndex -Col $botRight.Col
+
+        for ($r = $topLeft.Row; $r -le $botRight.Row; $r++) {
+            for ($ci = $startColIdx; $ci -le $endColIdx; $ci++) {
+                # Konvertera kolumnindex tillbaka till bokstav
+                $colLetter = ''
+                $tmp = $ci
+                while ($tmp -gt 0) {
+                    $tmp--
+                    $colLetter = [char]([int][char]'A' + ($tmp % 26)) + $colLetter
+                    $tmp = [math]::Floor($tmp / 26)
+                }
+                $cellKey = "$colLetter$r"
+                # Alla celler pekar till ownern — inklusive ownern själv (som pekar på sig själv)
+                $map[$cellKey] = @{ Col = $ownerCol; Row = $ownerRow }
+            }
+        }
+    }
+    return $map
+}
+
+function Resolve-MergeCellOwner {
+    <#
+    .SYNOPSIS
+        Om "$ColLetter$RowIndex" ingår i en merge-range, returnera ownerns (Col,Row).
+        Annars returnera original-koordinaterna.
+    .RETURNS
+        @{ Col='B'; Row=73 }
+    #>
+    param(
+        [Parameter(Mandatory=$true)]$MergeMap,
+        [Parameter(Mandatory=$true)][string]$ColLetter,
+        [Parameter(Mandatory=$true)][int]$RowIndex
+    )
+    $key = "$ColLetter$RowIndex"
+    if ($MergeMap.ContainsKey($key)) {
+        return $MergeMap[$key]
+    }
+    return @{ Col = $ColLetter; Row = $RowIndex }
+}
+
+function Get-OpenXmlCellText {
+    param(
+        [Parameter(Mandatory=$true)]$WorkbookPart,
+        [Parameter(Mandatory=$true)]$Cell
+    )
+    if (-not $Cell) { return '' }
+
+    $val = $Cell.CellValue
+    if (-not $val) {
+        if ($Cell.InlineString -and $Cell.InlineString.Text) { return ($Cell.InlineString.Text.Text + '') }
+        return ''
+    }
+
+    $raw = ($val.Text + '')
+    if (-not $raw) { return '' }
+
+    if ($Cell.DataType -and $Cell.DataType.Value -eq [DocumentFormat.OpenXml.Spreadsheet.CellValues]::SharedString) {
+        $sst = $WorkbookPart.SharedStringTablePart
+        if (-not $sst -or -not $sst.SharedStringTable) { return '' }
+        $idx = 0
+        if (-not [int]::TryParse($raw, [ref]$idx)) { return '' }
+
+        # Indexera direkt istället för Select-Object -Skip/-First
+        $items = Get-OpenXmlChildrenOfType -Parent $sst.SharedStringTable -Type ([DocumentFormat.OpenXml.Spreadsheet.SharedStringItem])
+        if ($idx -lt 0 -or $idx -ge $items.Count) { return '' }
+        $item = $items[$idx]
+
+        if ($item.Text) { return ($item.Text.Text + '') }
+
+        $sb = New-Object System.Text.StringBuilder
+        foreach ($t in (Get-OpenXmlDescendantsOfType -Parent $item -Type ([DocumentFormat.OpenXml.Spreadsheet.Text]))) {
+            [void]$sb.Append(($t.Text + ''))
+        }
+        return $sb.ToString()
+    }
+
+    return $raw
+}
+
+function Ensure-OpenXmlCell {
+    param(
+        [Parameter(Mandatory=$true)]$WorksheetPart,
+        [Parameter(Mandatory=$true)][int]$RowIndex,
+        [Parameter(Mandatory=$true)][string]$ColLetter
+    )
+    $ws = $WorksheetPart.Worksheet
+
+    # Hämta/skap SheetData utan generiska GetFirstChild<T>
+    $sheetData = (Get-OpenXmlChildrenOfType -Parent $ws -Type ([DocumentFormat.OpenXml.Spreadsheet.SheetData]))[0]
+    if (-not $sheetData) {
+        $sheetData = New-Object DocumentFormat.OpenXml.Spreadsheet.SheetData
+        $ws.AppendChild($sheetData) | Out-Null
+    }
+
+    # Hämta/skap rad
+    $rows = Get-OpenXmlChildrenOfType -Parent $sheetData -Type ([DocumentFormat.OpenXml.Spreadsheet.Row])
+    $row = @($rows | Where-Object { $_.RowIndex -and $_.RowIndex.Value -eq $RowIndex })[0]
+    if (-not $row) {
+        $row = New-Object DocumentFormat.OpenXml.Spreadsheet.Row
+        $row.RowIndex = [uint32]$RowIndex
+
+        $ref = @($rows | Where-Object { $_.RowIndex -and $_.RowIndex.Value -gt $RowIndex })[0]
+        if ($ref) { $sheetData.InsertBefore($row, $ref) | Out-Null } else { $sheetData.AppendChild($row) | Out-Null }
+    }
+
+    # Hämta cell
+    $cellRef = "$ColLetter$RowIndex"
+    $cells = Get-OpenXmlChildrenOfType -Parent $row -Type ([DocumentFormat.OpenXml.Spreadsheet.Cell])
+    $cell  = @($cells | Where-Object { $_.CellReference -and $_.CellReference.Value -eq $cellRef })[0]
+    if ($cell) { return $cell }
+
+    # Skapa ny cell och placera in enligt kolumnordning
+    $cell = New-Object DocumentFormat.OpenXml.Spreadsheet.Cell
+    $cell.CellReference = $cellRef
+
+    $targetIdx = Convert-ColLetterToIndex -Col $ColLetter
+    $refCell = @($cells | Where-Object {
+        $_.CellReference -and (Convert-ColLetterToIndex -Col (($_.CellReference.Value -replace '\d+$',''))) -gt $targetIdx
+    })[0]
+
+    if ($refCell) { $row.InsertBefore($cell, $refCell) | Out-Null } else { $row.AppendChild($cell) | Out-Null }
+    return $cell
+}
+
+function Set-OpenXmlCellText {
+    <#
+    .SYNOPSIS
+        Skriver text till en cell. Merge-aware: om cellen ingår i en merge-range
+        omdirigeras skrivningen till merge-ownern (top-left).
+    .PARAMETER MergeMap
+        Valfri hashtable från Get-MergeCellMap. Om angiven, resolvar merged cells.
+    .PARAMETER Overwrite
+        Om satt: skriver även om cellen redan har ett värde.
+    .OUTPUTS
+        PSCustomObject med .Written (bool) och .ResolvedCol / .ResolvedRow
+        (de faktiska koordinaterna som skrevs till — kan skilja vid merge-redirect).
+    #>
+    param(
+        [Parameter(Mandatory=$true)]$WorksheetPart,
+        [Parameter(Mandatory=$true)]$WorkbookPart,
+        [Parameter(Mandatory=$true)][int]$RowIndex,
+        [Parameter(Mandatory=$true)][string]$ColLetter,
+        [Parameter(Mandatory=$true)][string]$Value,
+        [switch]$Overwrite,
+        [hashtable]$MergeMap
+    )
+    if ($RowIndex -lt 1) { return [pscustomobject]@{ Written=$false; ResolvedCol=$ColLetter; ResolvedRow=$RowIndex } }
+
+    # ── Merge-resolution: omdirigera till owner om cellen är del av merge-range ──
+    $writeCol = $ColLetter
+    $writeRow = $RowIndex
+    if ($MergeMap -and $MergeMap.Count -gt 0) {
+        $owner = Resolve-MergeCellOwner -MergeMap $MergeMap -ColLetter $ColLetter -RowIndex $RowIndex
+        $writeCol = $owner.Col
+        $writeRow = $owner.Row
+    }
+
+    $cell = Ensure-OpenXmlCell -WorksheetPart $WorksheetPart -RowIndex $writeRow -ColLetter $writeCol
+    if (-not $cell) { return [pscustomobject]@{ Written=$false; ResolvedCol=$writeCol; ResolvedRow=$writeRow } }
+
+    # --- Typ-normalisering / guard ---
+    if ($cell -is [DocumentFormat.OpenXml.Spreadsheet.CellValue]) { $cell = $cell.Parent }
+    if ($cell -is [DocumentFormat.OpenXml.Spreadsheet.InlineString]) { $cell = $cell.Parent }
+    if (-not ($cell -is [DocumentFormat.OpenXml.Spreadsheet.Cell])) {
+        throw "Ensure-OpenXmlCell returned unexpected type (after normalization): $($cell.GetType().FullName)"
+    }
+    # --- /Typ-normalisering ---
+
+    # ── Existing-value check ──
+    $existing = Normalize-OpenXmlText (Get-OpenXmlCellText -WorkbookPart $WorkbookPart -Cell $cell)
+
+    # Etikett-texter i mallen räknas som "tomma" — de väntar på att fyllas i
+    if ($existing -match '^(?i)(Recorded By:|Performed By:|PQC Reviewed By:|Date:)$') {
+        $existing = ''
+    }
+
+    # Robust SwitchParameter-tolkning (PowerShell 5.1-safe)
+    $overwriteRequested = $false
+    if ($PSBoundParameters.ContainsKey('Overwrite')) {
+        if ($Overwrite -is [System.Management.Automation.SwitchParameter]) {
+            $overwriteRequested = $Overwrite.IsPresent
+        } else {
+            $overwriteRequested = [bool]$Overwrite
+        }
+    }
+
+    if ($existing -and -not $overwriteRequested) {
+        return [pscustomobject]@{ Written=$false; ResolvedCol=$writeCol; ResolvedRow=$writeRow }
+    }
+
+    # Skriv som InlineString för att undvika ändringar i SharedStringTable
+    $cell.DataType    = [DocumentFormat.OpenXml.Spreadsheet.CellValues]::InlineString
+    $cell.CellValue   = $null
+    $cell.InlineString      = New-Object DocumentFormat.OpenXml.Spreadsheet.InlineString
+    $cell.InlineString.Text = New-Object DocumentFormat.OpenXml.Spreadsheet.Text
+    $cell.InlineString.Text.Text = $Value
+    return [pscustomobject]@{ Written=$true; ResolvedCol=$writeCol; ResolvedRow=$writeRow }
+}
+
+function Find-FirstRowByContains_OpenXml {
+    <#
+    .SYNOPSIS  Söker rader efter label-text. Merge-aware: om cellen ingår i en
+               merge-range läses ownerns värde istället.
+    #>
+    param(
+        [Parameter(Mandatory=$true)]$WorksheetPart,
+        [Parameter(Mandatory=$true)]$WorkbookPart,
+        [Parameter(Mandatory=$true)][string]$ColLetter,
+        [Parameter(Mandatory=$true)][string]$Needle,
+        [hashtable]$MergeMap
+    )
+    $needleNorm = (Normalize-OpenXmlText $Needle).ToLowerInvariant()
+    $sheetData = (Get-OpenXmlChildrenOfType -Parent $WorksheetPart.Worksheet -Type ([DocumentFormat.OpenXml.Spreadsheet.SheetData]))[0]
+    if (-not $sheetData) { return $null }
+
+    foreach ($row in (Get-OpenXmlChildrenOfType -Parent $sheetData -Type ([DocumentFormat.OpenXml.Spreadsheet.Row]))) {
+        $r = 0
+        if ($row.RowIndex) { $r = [int]$row.RowIndex.Value }
+        if ($r -le 0) { continue }
+
+        # Resolva till merge-owner om cellen ingår i en merge-range
+        $readCol = $ColLetter
+        $readRow = $r
+        if ($MergeMap -and $MergeMap.Count -gt 0) {
+            $owner = Resolve-MergeCellOwner -MergeMap $MergeMap -ColLetter $ColLetter -RowIndex $r
+            $readCol = $owner.Col
+            $readRow = $owner.Row
+        }
+
+        $cellRef = "$readCol$readRow"
+        # Sök i rätt rad (ownerns rad, som kan vara en annan vid vertikal merge)
+        $searchRow = $row
+        if ($readRow -ne $r) {
+            # Hämta ownerns rad istället
+            $allRows = Get-OpenXmlChildrenOfType -Parent $sheetData -Type ([DocumentFormat.OpenXml.Spreadsheet.Row])
+            $searchRow = @($allRows | Where-Object { $_.RowIndex -and $_.RowIndex.Value -eq $readRow })[0]
+            if (-not $searchRow) { continue }
+        }
+
+        $cell = @(
+            Get-OpenXmlChildrenOfType -Parent $searchRow -Type ([DocumentFormat.OpenXml.Spreadsheet.Cell]) |
+            Where-Object { $_.CellReference -and $_.CellReference.Value -eq $cellRef }
+        )[0]
+
+        if (-not $cell) { continue }
+        $txt = Normalize-OpenXmlText (Get-OpenXmlCellText -WorkbookPart $WorkbookPart -Cell $cell)
+        if (-not $txt) { continue }
+        if ($txt.ToLowerInvariant().Contains($needleNorm)) { return $r }
+    }
+    return $null
+}
+
+function Test-OpenXmlDataSummaryHasData {
+    param(
+        [Parameter(Mandatory=$true)]$WorksheetPart,
+        [Parameter(Mandatory=$true)]$WorkbookPart,
+        [string]$DataColLetter = 'C'
+    )
+    $sheetData = (Get-OpenXmlChildrenOfType -Parent $WorksheetPart.Worksheet -Type ([DocumentFormat.OpenXml.Spreadsheet.SheetData]))[0]
+    if (-not $sheetData) { return $false }
+
+    foreach ($row in (Get-OpenXmlChildrenOfType -Parent $sheetData -Type ([DocumentFormat.OpenXml.Spreadsheet.Row]))) {
+        $r = 0
+        if ($row.RowIndex) { $r = [int]$row.RowIndex.Value }
+        if ($r -le 0) { continue }
+        $cellRef = "$DataColLetter$r"
+
+        $cell = @(
+            Get-OpenXmlChildrenOfType -Parent $row -Type ([DocumentFormat.OpenXml.Spreadsheet.Cell]) |
+            Where-Object { $_.CellReference -and $_.CellReference.Value -eq $cellRef }
+        )[0]
+
+        if (-not $cell) { continue }
+        $txt = Normalize-OpenXmlText (Get-OpenXmlCellText -WorkbookPart $WorkbookPart -Cell $cell)
+        if (-not $txt) { continue }
+        if ($txt -match '^(?i)(Performed By:|Recorded By:|PQC Reviewed By:|Date:)$') { continue }
+        return $true
+    }
+    return $false
+}
+
+function Invoke-WorksheetSignature_OpenXml {
+    <#
+    Mode:
+      - Sammanstallning
+      - Granskning
+
+    Returns: object with Written/Skipped.
+    #>
+    param(
+        [Parameter(Mandatory=$true)][string]$Path,
+        [Parameter(Mandatory=$true)][string]$FullName,
+        [Parameter(Mandatory=$true)][string]$SignDateYmd,
+        [Parameter(Mandatory=$true)][ValidateSet('Sammanstallning','Granskning')][string]$Mode,
+        [switch]$HasResample,
+        [switch]$Overwrite,
+        [Parameter(Mandatory=$true)][string]$ModulesRoot
+    )
+
+        Set-StrictMode -Version 2.0
+
+    Import-OpenXmlSdk -ModulesRoot $ModulesRoot | Out-Null
+
+    $res = [pscustomobject]@{
+        Mode         = $Mode
+        Written      = New-Object System.Collections.Generic.List[string]
+        Skipped      = New-Object System.Collections.Generic.List[string]
+        WrittenCells = New-Object System.Collections.Generic.List[pscustomobject]
+    }
+
+    $doc = $null
+    try {
+        $doc = [DocumentFormat.OpenXml.Packaging.SpreadsheetDocument]::Open($Path, $true)
+        $wbp = $doc.WorkbookPart
+        if (-not $wbp -or -not $wbp.Workbook) { throw 'WorkbookPart saknas.' }
+        $sheets = $wbp.Workbook.Sheets
+        if (-not $sheets) { throw 'Sheets saknas.' }
+
+        $targets = @()
+        if ($Mode -eq 'Sammanstallning') {
+            $targets = @(
+                @{ Name='Test Summary';                 NameLabelCol='B'; NameNeedle='Recorded By:';       NameWriteCol='C'; DateLabelCols=@('I');     DateNeedle='Date:'; DateWriteCol='J'; Offset=0;  DataSummaryGuard=$false },
+                @{ Name='Data Summary';                 NameLabelCol='A'; NameNeedle='Recorded By:';       NameWriteCol='B'; DateLabelCols=@('C');     DateNeedle='Date:'; DateWriteCol='D'; Offset=0;  DataSummaryGuard=$true  },
+                @{ Name='Extra Data Summary';           NameLabelCol='A'; NameNeedle='Recorded By:';       NameWriteCol='B'; DateLabelCols=@('C');     DateNeedle='Date:'; DateWriteCol='D'; Offset=0;  DataSummaryGuard=$true  },
+                # Resample: signera endast om fliken finns OCH innehåller data
+                @{ Name='Resample Data Summary';         NameLabelCol='A'; NameNeedle='Recorded By:';       NameWriteCol='B'; DateLabelCols=@('C');     DateNeedle='Date:'; DateWriteCol='D'; Offset=0;  DataSummaryGuard=$true; ResampleOnly=$true },
+                @{ Name='Resample Date Summary';        NameLabelCol='A'; NameNeedle='Recorded By:';       NameWriteCol='B'; DateLabelCols=@('C');     DateNeedle='Date:'; DateWriteCol='D'; Offset=0;  DataSummaryGuard=$true; ResampleOnly=$true },
+                @{ Name='Seal Test Failure Count';      NameLabelCol='K'; NameNeedle='Performed By:';      NameWriteCol='L'; DateLabelCols=@('K');     DateNeedle='Date:'; DateWriteCol='L'; Offset=-1; DataSummaryGuard=$false },
+                @{ Name='Statistical Process Control';  NameLabelCol='K'; NameNeedle='Performed By:';      NameWriteCol='L'; DateLabelCols=@('K');     DateNeedle='Date:'; DateWriteCol='L'; Offset=-1; DataSummaryGuard=$false },
+                @{ Name='Vacuum Seal Data';             NameLabelCol='B'; NameNeedle='Recorded By:';       NameWriteCol='C'; DateLabelCols=@('D','E'); DateNeedle='Date:'; DateWriteCol='F'; Offset=0;  DataSummaryGuard=$false }
+            )
+        } else {
+            $targets = @(
+                @{ Name='Test Summary'; NameLabelCol='B'; NameNeedle='PQC Reviewed By:'; NameWriteCol='C'; DateLabelCols=@('I'); DateNeedle='Date:'; DateWriteCol='J'; Offset=0; DataSummaryGuard=$false }
+            )
+        }
+
+        foreach ($t in $targets) {
+            $sheetName = $t.Name
+
+            if ($t.ContainsKey('ResampleOnly') -and $t.ResampleOnly -and (-not $HasResample)) {
+                [void]$res.Skipped.Add("$sheetName (ej resample)")
+                continue
+            }
+
+            $sheet = @(
+                Get-OpenXmlChildrenOfType -Parent $sheets -Type ([DocumentFormat.OpenXml.Spreadsheet.Sheet]) |
+                Where-Object { $_.Name -and $_.Name.Value -eq $sheetName }
+            )[0]
+            if (-not $sheet) {
+                [void]$res.Skipped.Add($sheetName)
+                continue
+            }
+            $wsp = $wbp.GetPartById($sheet.Id)
+            if (-not $wsp) {
+                [void]$res.Skipped.Add($sheetName)
+                continue
+            }
+
+            if ($t.DataSummaryGuard) {
+                $hasData = Test-OpenXmlDataSummaryHasData -WorksheetPart $wsp -WorkbookPart $wbp -DataColLetter 'C'
+                if (-not $hasData) {
+                    [void]$res.Skipped.Add("$sheetName (ingen data)")
+                    continue
+                }
+            }
+
+            # ── Bygg merge-map EN gång per flik (O(merges) — typiskt < 20 st) ──
+            $mergeMap = Get-MergeCellMap -WorksheetPart $wsp
+
+            $nameRow = Find-FirstRowByContains_OpenXml -WorksheetPart $wsp -WorkbookPart $wbp -ColLetter $t.NameLabelCol -Needle $t.NameNeedle -MergeMap $mergeMap
+            $dateRow = $null
+            foreach ($dc in $t.DateLabelCols) {
+                $dateRow = Find-FirstRowByContains_OpenXml -WorksheetPart $wsp -WorkbookPart $wbp -ColLetter $dc -Needle $t.DateNeedle -MergeMap $mergeMap
+                if ($dateRow) { break }
+            }
+
+            $wroteAny = $false
+            if ($nameRow) {
+                $nameResult = Set-OpenXmlCellText -WorksheetPart $wsp -WorkbookPart $wbp -RowIndex ($nameRow + $t.Offset) -ColLetter $t.NameWriteCol -Value $FullName -Overwrite:$Overwrite -MergeMap $mergeMap
+                if ($nameResult.Written) {
+                    [void]$res.WrittenCells.Add([pscustomobject]@{ Sheet=$sheetName; Row=$nameResult.ResolvedRow; Col=$nameResult.ResolvedCol; Value=$FullName })
+                }
+                $wroteAny = $nameResult.Written -or $wroteAny
+            }
+            if ($dateRow) {
+                $dateResult = Set-OpenXmlCellText -WorksheetPart $wsp -WorkbookPart $wbp -RowIndex ($dateRow + $t.Offset) -ColLetter $t.DateWriteCol -Value $SignDateYmd -Overwrite:$Overwrite -MergeMap $mergeMap
+                if ($dateResult.Written) {
+                    [void]$res.WrittenCells.Add([pscustomobject]@{ Sheet=$sheetName; Row=$dateResult.ResolvedRow; Col=$dateResult.ResolvedCol; Value=$SignDateYmd })
+                }
+                $wroteAny = $dateResult.Written -or $wroteAny
+            }
+
+            if ($wroteAny) {
+                [void]$res.Written.Add($sheetName)
+                # GDP-kritisk: spara WorksheetPart EXPLICIT — $wbp.Workbook.Save() sparar INTE sheet-XML
+                try { $wsp.Worksheet.Save() } catch {
+                    throw "Kunde inte spara WorksheetPart '$sheetName': $($_.Exception.Message)"
+                }
+            } else {
+                $skipReason = ''
+                if (-not $nameRow -and -not $dateRow) {
+                    $skipReason = 'labels saknas'
+                } else {
+                    $skipReason = 'redan ifyllt'
+                }
+                [void]$res.Skipped.Add("$sheetName ($skipReason)")
+            }
+        }
+
+        $wbp.Workbook.Save()
+    } catch {
+        # Om Save eller Write kastade — propagera till Main.ps1 för GDP-hantering
+        try { if ($doc) { $doc.Dispose() } } catch {}
+        throw
+    }
+    # Explicit Close: sparar alla kvarvarande dirty parts + stänger paketet
+    try { if ($doc) { $doc.Close(); $doc.Dispose() } } catch {
+        try { if ($doc) { $doc.Dispose() } } catch {}
+    }
+
+    return $res
+}
+
+function Find-OpenXmlCell {
+    <#
+    .SYNOPSIS
+        Read-only cell lookup — hittar en cell utan att skapa rader/celler.
+        Returnerar $null om cellen inte finns.
+    #>
+    param(
+        [Parameter(Mandatory=$true)]$WorksheetPart,
+        [Parameter(Mandatory=$true)][int]$RowIndex,
+        [Parameter(Mandatory=$true)][string]$ColLetter
+    )
+    $ws = $WorksheetPart.Worksheet
+    $sheetData = (Get-OpenXmlChildrenOfType -Parent $ws -Type ([DocumentFormat.OpenXml.Spreadsheet.SheetData]))[0]
+    if (-not $sheetData) { return $null }
+
+    $rows = Get-OpenXmlChildrenOfType -Parent $sheetData -Type ([DocumentFormat.OpenXml.Spreadsheet.Row])
+    $row = @($rows | Where-Object { $_.RowIndex -and $_.RowIndex.Value -eq $RowIndex })[0]
+    if (-not $row) { return $null }
+
+    $cellRef = "$ColLetter$RowIndex"
+    $cells = Get-OpenXmlChildrenOfType -Parent $row -Type ([DocumentFormat.OpenXml.Spreadsheet.Cell])
+    $cell = @($cells | Where-Object { $_.CellReference -and $_.CellReference.Value -eq $cellRef })[0]
+    return $cell
+}
+
+function Verify-WorksheetSignatures_OpenXml {
+    <#
+    .SYNOPSIS
+        GDP-säker read-back: öppnar Worksheet med OpenXML SDK (read-only)
+        och verifierar att alla skrivna celler matchar förväntat värde.
+    .PARAMETER Path
+        Sökväg till Worksheet-filen.
+    .PARAMETER WrittenCells
+        Lista från Invoke-WorksheetSignature_OpenXml .WrittenCells
+    .PARAMETER ModulesRoot
+        Sökväg till Modules-mappen (för Import-OpenXmlSdk).
+    #>
+    param(
+        [Parameter(Mandatory=$true)][string]$Path,
+        [Parameter(Mandatory=$true)][object[]]$WrittenCells,
+        [Parameter(Mandatory=$true)][string]$ModulesRoot
+    )
+
+    $result = [pscustomobject]@{
+        OK             = $false
+        CellsChecked   = 0
+        CellsVerified  = 0
+        Mismatches     = New-Object System.Collections.Generic.List[string]
+        Error          = $null
+    }
+
+    if (-not $WrittenCells -or $WrittenCells.Count -eq 0) {
+        $result.OK = $true
+        return $result
+    }
+
+    Import-OpenXmlSdk -ModulesRoot $ModulesRoot | Out-Null
+
+    $doc = $null
+    try {
+        $doc = [DocumentFormat.OpenXml.Packaging.SpreadsheetDocument]::Open($Path, $false)  # read-only
+        $wbp = $doc.WorkbookPart
+        if (-not $wbp -or -not $wbp.Workbook) { throw 'WorkbookPart saknas vid verifiering.' }
+        $sheets = $wbp.Workbook.Sheets
+
+        foreach ($wc in $WrittenCells) {
+            $result.CellsChecked++
+            $sheet = @(
+                Get-OpenXmlChildrenOfType -Parent $sheets -Type ([DocumentFormat.OpenXml.Spreadsheet.Sheet]) |
+                Where-Object { $_.Name -and $_.Name.Value -eq $wc.Sheet }
+            )[0]
+            if (-not $sheet) {
+                [void]$result.Mismatches.Add("$($wc.Sheet) $($wc.Col)$($wc.Row): Fliken hittades inte vid verifiering")
+                continue
+            }
+            $wsp = $wbp.GetPartById($sheet.Id)
+            if (-not $wsp) {
+                [void]$result.Mismatches.Add("$($wc.Sheet) $($wc.Col)$($wc.Row): WorksheetPart saknas")
+                continue
+            }
+            $cell = Find-OpenXmlCell -WorksheetPart $wsp -RowIndex $wc.Row -ColLetter $wc.Col
+            if (-not $cell) {
+                $actual = ''
+            } else {
+                $actual = Normalize-OpenXmlText (Get-OpenXmlCellText -WorkbookPart $wbp -Cell $cell)
+            }
+            $actual = ($actual + '').Trim()
+            $expected = ($wc.Value + '').Trim()
+            if ($actual -eq $expected) {
+                $result.CellsVerified++
+            } else {
+                [void]$result.Mismatches.Add("$($wc.Sheet) $($wc.Col)$($wc.Row): Förväntade='$expected' Faktisk='$actual'")
+            }
+        }
+
+        $result.OK = ($result.Mismatches.Count -eq 0 -and $result.CellsVerified -eq $WrittenCells.Count)
+    } catch {
+        $result.Error = $_.Exception.Message
+    } finally {
+        try { if ($doc) { $doc.Dispose() } } catch {}
+    }
+    return $result
+}
+
+
+
+
+
+
+
+
+The user is asking if the merge-cell handling is truly bulletproof. I need to think critically and honestly about edge cases rather than just saying “yes.”
+Let me think through potential issues:
+	1.	Column index back-conversion in Get-MergeCellMap - I wrote a manual column-letter-to-index-back-to-letter conversion. Let me check if it’s correct.
+	2.	EPPlus verification vs OpenXML write coordinates - If OpenXML writes to owner B73, WrittenCells says B73, EPPlus reads B73 - that should match. But what if EPPlus resolves merged cells differently?
+	3.	The Ensure-OpenXmlCell function - It creates cells if they don’t exist. If we redirect to the merge owner, the owner cell should already exist (it’s the top-left of the merge). But what if it doesn’t exist in XML? That’s possible for empty merged cells.
+	4.	What about the case where the merge owner already has content from the label? - The label-as-empty fix handles that.
+	5.	Performance - Get-MergeCellMap is called once per sheet, and Find-FirstRowByContains_OpenXml iterates all rows. For each row it does a Resolve which could add up if there are many merged cells, though it’s probably acceptable since we’re only doing this once per search operation.
+	6.	What if MergeMap is null/not passed? - Both functions have guards that check if the map exists and has entries, so they safely fall back to the original behavior when it’s not available.
+	7.	Edge case: What if a merge range spans across the label AND write columns? - If “Recorded By:” is in B73 and we’re writing to C73, but B73:C73 is merged, the search finds the label in row 73 and the write operation would target the merge owner instead, which should work correctly.
+Now I’m thinking through what happens when the label cell and write cell are actually the same merged cell - in that case, writing the name would replace the label text, which is the expected behavior since they’re technically one cell in Excel.
+The more realistic scenario is that the label sits in one column while the actual write target is in a different merged range - like if the name field is C73:D73 with a write column of C, or the date field is I73:J73 with a write column of J. When EPPlus resolves the merge, it returns the owner cell, and that’s where we write and verify against.
+Now I’m checking the column-index-to-letter conversion logic in the merge cell map function. Testing a few cases: column C converts correctly, Z converts correctly, and AA (the two-letter case) also converts correctly through the loop that handles multi-character columns.
+The vertical merge resolution looks sound too—when we encounter a merged cell like B73:B75, we properly fetch the owner row and extract the label from there, even if we process multiple rows that all point to the same owner. And when we find a match in the owner’s row, we return it with the original row number intact, so there’s no data loss.
+But there’s a potential issue with how we’re handling the offset calculation afterward. If the label “Recorded By:” is at B73 (merged across B73:B75) and we’re processing row 74, we find the label correctly but then return row 74 as the match. When we later compute the offset to determine where to write the name, we’re using row 74 instead of row 73, which means we’d write to C74 rather than C73 where the label actually lives. This creates a mismatch—we’re finding labels in merged cells but not accounting for the fact that the corresponding data should go in the owner’s row, not the iteration row.
+In practice, though, this probably doesn’t matter much because label cells like “Recorded By:” are typically merged horizontally (across columns), not vertically. And even if they were vertically merged, the iteration would hit the owner row first since OpenXML rows are ordered by RowIndex, so we’d return the correct row before ever reaching the non-owner rows.
+I’m also wondering whether Test-OpenXmlDataSummaryHasData should be using MergeMap too, since it iterates through cells looking for data values. If a data cell is merged, the owner cell would have the value, but it’s unlikely that data cells would be in a different column than expected, so it’s probably fine as-is.
+Overall, the patch handles the real-world cases well—especially horizontal merges on signature cells—but I should note that there are some edge cases around column handling that could be flagged. So the cell resolution logic handles both cases cleanly—whether the merge owner already has a cell node or needs one created, we’re covered either way.
+
+
+
+
+
+
+
+
+
+
+
+
+Ärligt svar: nästan. Jag hittar en sak jag bör flagga.
+Det som ÄR bulletproof:
+Horisontell merge (det vanliga fallet — t.ex. C73:D73 för namnfält, I73:J73 för datumfält): Skrivning resolvas korrekt till owner. WrittenCells registrerar resolved-koordinater. EPPlus verifierar samma cell. Kedjan håller.
+Etikett-som-tom + SwitchParameter: Din fix A + B är integrerade och fungerar deterministiskt.
+Kolumn-konvertering i Get-MergeCellMap: Verifierad korrekt för A–Z och AA+.
+Fallback utan merge: $MergeMap är valfri — null/tom → originallogik. Bakåtkompatibelt.
+Det som BORDE vara bulletproof men som jag vill att du verifierar en gång:
+Test-OpenXmlDataSummaryHasData (rad 438) — den itererar kolumn C och filtrerar bort etikettexterna. Den är inte merge-aware. Om en datacell i Data Summary-fliken ingår i en merge med owner i en annan kolumn, kan funktionen missa data och returnera $false → flik hoppas över. Jag bedömer risken som låg (dataceller i kolumn C brukar inte vara horisontellt mergade) men du bör verifiera det i din mall. Fix vid behov:
+
+# Rad 438 — lägg till MergeMap-parameter + resolution (samma mönster)
+function Test-OpenXmlDataSummaryHasData {
+    param(
+        [Parameter(Mandatory=$true)]$WorksheetPart,
+        [Parameter(Mandatory=$true)]$WorkbookPart,
+        [string]$DataColLetter = 'C',
+        [hashtable]$MergeMap                          # ← ny
+    )
+
+
+Och i Invoke-WorksheetSignature_OpenXml, anropet:
+
+$hasData = Test-OpenXmlDataSummaryHasData ... -MergeMap $mergeMap
+
+
+Jag valde att inte inkludera den i patchen just nu — den har en valfri [hashtable]$MergeMap-parameter, så om du lägger till den är det bakåtkompatibelt och kräver noll ändringar i annan kod. Men om du vill ha den nu säger du till.
+Sammanfattning:
+
+
+
+|Scenario                             |Status                     |
+|-------------------------------------|---------------------------|
+|Horisontell merge på signeringsceller|Bulletproof ✅              |
+|Etikett-celler blockerar skrivning   |Fixat ✅                    |
+|`-Overwrite:$false/$true` tolkning   |Deterministisk ✅           |
+|Verifieringskedja OpenXML→EPPlus     |Koordinater stämmer ✅      |
+|Ingen merge i mallen (legacy)        |Bakåtkompatibelt ✅         |
+|`Test-OpenXmlDataSummaryHasData`     |Verifiera mallen manuellt ⚠️|
+
+
+
+
+
+
+
+
+The user wants extra safety measures that won’t introduce any bugs. Let me think about what defensive additions I can make that are purely additive/logging and can’t break anything.
+Key principle: only ADD observability/logging, never change control flow.
+Ideas:
+	1.	Merge-redirect logging in Set-OpenXmlCellText — log when a cell gets redirected to owner
+	2.	Diagnostic output in Invoke-WorksheetSignature_OpenXml showing merge count per sheet
+	3.	WrittenCells sanity check — verify WrittenCells list isn’t empty before passing to EPPlus verify
+	4.	Add a summary of merge-redirects to the result object
+	5.	I should focus on pure diagnostics that only observe behavior without altering any logic paths.
+
+
+
+
+
+
+
+
+
+
+	1.	A Diagnostics list to the result object
+	2.	After building mergeMap, log how many merges found
+	3.	After each Set-OpenXmlCellText, log if merge-redirect happened
+	4.	Log label-as-empty detections in Set-OpenXmlCellText via a Write-Verbose or just return info
+Actually, the safest approach is to add diagnostics to the result object returned by Invoke-WorksheetSignature_OpenXml. Then Main.ps1 can optionally log them via Gui-Log. That way zero control flow changes, just extra data.
+Let me do:
+	1.	Add Diagnostics list to result object
+	2.	Capture merge count and redirect events as I process cells
+	3.	Include label-as-empty detection info in the diagnostics data
+
+	
+	
+	
+	
+	
+	
+	
+	Tre defensiva tillägg — rent additiva, noll ändring av befintlig logik:
+
+1. Merge-redirect logg i Invoke-WorksheetSignature_OpenXml
+Så du SER i Gui-Log exakt när en merge-redirect sker:
+
+             # ── Bygg merge-map EN gång per flik (O(merges) — typiskt < 20 st) ──
+             $mergeMap = Get-MergeCellMap -WorksheetPart $wsp
++
++            # Diagnostik: logga om fliken har merges som berör signeringsceller
++            if ($mergeMap.Count -gt 0) {
++                $relevantMerges = @($mergeMap.Keys | Where-Object {
++                    $own = $mergeMap[$_]
++                    ($own.Col -ne ($_ -replace '\d+','')) -or ($own.Row -ne [int]($_ -replace '[A-Z]+',''))
++                }).Count
++                if ($relevantMerges -gt 0) {
++                    Write-Verbose "MERGE-MAP [$sheetName]: $($mergeMap.Count) celler i merge-ranges ($relevantMerges omdirigerade)"
++                }
++            }
+
+             $nameRow = Find-FirstRowByContains_OpenXml ...
+
+
+Effekt: Syns bara med -Verbose. Noll påverkan i normal drift. Men om du kopplar Write-Verbose till Gui-Log i dev-mode ser du precis vilka flikar som har merges.
+
+2. Guard i Set-OpenXmlCellText: verifiera att owner-cellen faktiskt existerar i XML
+
+     # ── Merge-resolution: omdirigera till owner om cellen är del av merge-range ──
+     $writeCol = $ColLetter
+     $writeRow = $RowIndex
+     if ($MergeMap -and $MergeMap.Count -gt 0) {
+         $owner = Resolve-MergeCellOwner -MergeMap $MergeMap -ColLetter $ColLetter -RowIndex $RowIndex
+         $writeCol = $owner.Col
+         $writeRow = $owner.Row
+     }
++
++    # Säkerhet: om merge-redirect pekar utanför rimligt radintervall, avbryt
++    if ($writeRow -lt 1 -or $writeRow -gt 1048576) {
++        return [pscustomobject]@{ Written=$false; ResolvedCol=$writeCol; ResolvedRow=$writeRow }
++    }
+
+     $cell = Ensure-OpenXmlCell ...
+
+
+Effekt: Skyddar mot korrupt merge-range i mallen som pekar till rad 0 eller overflow. Defensivt nät.
+
+3. WrittenCells — inkludera merge-info för audit trail
+
+             if ($nameResult.Written) {
+-                [void]$res.WrittenCells.Add([pscustomobject]@{ Sheet=$sheetName; Row=$nameResult.ResolvedRow; Col=$nameResult.ResolvedCol; Value=$FullName })
++                $wasMerged = ($nameResult.ResolvedCol -ne $t.NameWriteCol) -or ($nameResult.ResolvedRow -ne ($nameRow + $t.Offset))
++                [void]$res.WrittenCells.Add([pscustomobject]@{ Sheet=$sheetName; Row=$nameResult.ResolvedRow; Col=$nameResult.ResolvedCol; Value=$FullName; MergeRedirect=$wasMerged })
+             }
+
+
+Och samma för datum:
+
+             if ($dateResult.Written) {
+-                [void]$res.WrittenCells.Add([pscustomobject]@{ Sheet=$sheetName; Row=$dateResult.ResolvedRow; Col=$dateResult.ResolvedCol; Value=$SignDateYmd })
++                $wasMerged = ($dateResult.ResolvedCol -ne $t.DateWriteCol) -or ($dateResult.ResolvedRow -ne ($dateRow + $t.Offset))
++                [void]$res.WrittenCells.Add([pscustomobject]@{ Sheet=$sheetName; Row=$dateResult.ResolvedRow; Col=$dateResult.ResolvedCol; Value=$SignDateYmd; MergeRedirect=$wasMerged })
+             }
+
+
+Effekt: WrittenCells får en MergeRedirect-flagga. EPPlus-verifieringen ignorerar den (den läser bara Sheet/Row/Col/Value), men om du loggar WrittenCells till audit ser du exakt vilka celler som omdirigerades. Perfekt för felsökning utan att röra verifieringskedjan.
+
+Sammanfattat: Verbose-diagnostik, range-guard, audit-flagga. Alla tre är additiva — om de tas bort fungerar allt exakt som innan. Lycka till imorgon!​​​​​​​​​​​​​​​​
+
+
+
+
+
+
+
+
+
+
+
+
+Ärliga svaret: noll obligatoriska ändringar — allt är inkapslat i OpenXmlHelpers.ps1. Men för synlighet i loggen, en liten nice-to-have:
+
+             if ($wsVerify.OK) {
+-                Gui-Log "✅ Worksheet-signatur verifierad: $($wsVerify.CellsVerified)/$($wsVerify.CellsChecked) celler OK. $(Split-Path $wsSignPath -Leaf)" 'Info'
++                $mergeCount = @($wsInvoke.WrittenCells | Where-Object { $_.MergeRedirect }).Count
++                $mergeNote = if ($mergeCount -gt 0) { " ($mergeCount merge-omdirigerade)" } else { '' }
++                Gui-Log "✅ Worksheet-signatur verifierad: $($wsVerify.CellsVerified)/$($wsVerify.CellsChecked) celler OK${mergeNote}. $(Split-Path $wsSignPath -Leaf)" 'Info'
+
+
+Effekt: Loggen visar ✅ Worksheet-signatur verifierad: 8/8 celler OK (3 merge-omdirigerade). Worksheet_95102.xlsx — så du vet att merge-logiken aktiverades. Utan merges ser det ut exakt som innan.
+Byt $wsInvoke mot det variabelnamn du använder för resultatet från Invoke-WorksheetSignature_OpenXml. Det är den enda anpassningen.​​​​​​​​​​​​​​​​
+
+
+
+
+
+
+Best practices for specific use cases
+
+For coding tasks
+
+Provide complete context about your coding environment in your initial message.
+Include entire relevant code snippets in one message for reviews or debugging.
+For writing assistance
+
+Outline requirements, target audience, and key points comprehensively.
+Send entire texts for editing in one message rather than breaking them up.
+For research and analysis
+
+Clearly define your research question and focus areas initially.
+Provide all relevant data in a single, well-structured message.
+By following these best practices, you can make the most efficient use of your Claude plan's message allocation.
+
+
+
