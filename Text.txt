@@ -1,0 +1,83 @@
+Du behöver inte köpa Claude. Det här går att få i mål — och nu när DataType-felet är borta har vi ett tydligt nästa steg.
+
+Det du beskriver (GUI säger “redan ifylld” fast cellerna ser tomma ut) kan bara hända om själva skrivningen inte ens försöks, eller försöks men returnerar Written=$false och då blir $wroteAny = $false.
+
+För att lösa det utan gissning behöver vi se vilken av dessa som gäller:
+	•	A) nameRow/dateRow hittas inte → din kod tror “labels saknas” eller faller in i “redan ifylld” beroende på logik.
+	•	B) Write-OpenXmlCellText_Force körs men Get-OpenXmlCellSafe returnerar $null (cell kan inte resolvas/skrivas).
+	•	C) Den skriver, men verifieringen läser annan cell än du tittar på (fel row/col pga label-hit eller offset).
+
+Vi gör detta på det enda sättet som inte kräver gissning: logga inre fakta från signeringen
+
+Jag ger dig en minimal “instrumentering” du kan lägga in som inte ändrar logik – bara berättar vad som faktiskt sker.
+
+1) Lägg till detta i Invoke-WorksheetSignature_OpenXml (fix4-filen du kör)
+
+Precis efter att nameRow och dateRow räknas fram, innan skrivning:
+
+try {
+    Add-Content -LiteralPath (Join-Path $env:TEMP 'ws_sign_debug.log') -Value (
+        ("[{0}] Sheet={1} overwrite={2} nameRow={3} dateRow={4} nameWrite={5}{6} dateWrite={7}{8}" -f `
+            (Get-Date -Format "HH:mm:ss"), $sheetName, $overwriteBool, $nameRow, $dateRow, `
+            $t.NameWriteCol, ($nameRow + $t.Offset), $t.DateWriteCol, ($dateRow + $t.Offset)
+        )
+    )
+} catch {}
+
+Och direkt efter varje force-write:
+
+try { Add-Content -LiteralPath (Join-Path $env:TEMP 'ws_sign_debug.log') -Value ("    FORCE name Written={0} owner={1}" -f $nameWritten, ($nameWrittenObj.OwnerRef + '')) } catch {}
+try { Add-Content -LiteralPath (Join-Path $env:TEMP 'ws_sign_debug.log') -Value ("    FORCE date Written={0} owner={1}" -f $dateWritten, ($dateWrittenObj.OwnerRef + '')) } catch {}
+
+Kör sen en signering och öppna filen:
+
+%TEMP%\ws_sign_debug.log
+
+Klistra in bara raderna för t.ex. “Test Summary”.
+
+Varför detta är avgörande
+
+Med den loggen kan jag säga exakt:
+	•	om nameRow/dateRow blir $null (då är label-finding problemet),
+	•	om den försöker skriva men Written=False (då är cell-resolve/worksheet-skydd problemet),
+	•	eller om den skriver i “fel rad” (offset/needle matchar fel label).
+
+Det här är snabbaste vägen till en konkret fix.
+
+⸻
+
+2) Den troliga grundorsaken (inte gissning – baserat på din kodstruktur)
+
+Eftersom du tidigare kunde signera vissa workbook men nu inte längre:
+	•	det mest sannolika är att label-sökningen träffar fel rad eller fel cell i vissa templates (t.ex. en annan “Date:” längre upp, eller “Recorded By:” i en sektion du inte menar).
+	•	då får du nameRow/dateRow som inte matchar signaturraden, och du skriver på en cell som kanske är skyddad/inte en cell du ser i UI.
+
+Men jag vill inte påstå det säkert utan loggen ovan.
+
+⸻
+
+3) “Börja om med projektet som fungerade delvis?”
+
+Nej – inte än.
+Att skicka hela projektet igen hjälper inte förrän vi vet vilken av A/B/C det är. Loggen ovan ger svaret på 1 körning.
+
+⸻
+
+4) En snabb “failsafe” om du måste lansera torsdag
+
+Om debuggen visar att “nameRow/dateRow = hittas” men cell-write alltid misslyckas pga skydd/struktur:
+
+✅ Gör en kompromiss för lanseringen:
+	•	Om overwrite är på: skriv endast i owner-cellen och hoppa N/A-tail helt.
+	•	Det minskar skrivoperationer och undviker att du råkar stöta på skyddade tail-celler.
+
+(Det är en patch jag kan göra på 2 minuter när vi vet vad loggen visar.)
+
+⸻
+
+Gör så här nu
+	1.	Lägg in debug-loggen (kopiera in raderna ovan).
+	2.	Kör en signering på en “tom” worksheet där det misslyckas.
+	3.	Skicka loggen för en enda sheet (10–20 rader).
+
+Då ger jag dig en exakt patch som gör att den alltid skriver när du vill, utan att ljuga i GUI.
