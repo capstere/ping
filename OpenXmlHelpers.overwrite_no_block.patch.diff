@@ -1,0 +1,63 @@
+--- OpenXmlHelpers.ps1 (before)
++++ OpenXmlHelpers.ps1 (after)
+@@ -294,24 +294,14 @@
+     }
+ 
+     $overwriteRequested = $false
+-    if ($PSBoundParameters.ContainsKey('Overwrite')) {
+-        try {
+-
+-            if ($Overwrite -is [System.Management.Automation.SwitchParameter]) {
+-                $overwriteRequested = $Overwrite.IsPresent
+-            } else {
+-
+-                $overwriteRequested = [bool]$Overwrite
+-            }
+-        } catch {
+-            $overwriteRequested = [bool]$Overwrite
+-        }
+-    }
+-    if ($existing -and -not $overwriteRequested) {
+-        return $false
+-    }
+-
+-    $cell.DataType    = [DocumentFormat.OpenXml.Spreadsheet.CellValues]::InlineString
++    try { $overwriteRequested = [bool]$Overwrite.IsPresent } catch { $overwriteRequested = [bool]$Overwrite }
++
++    if (-not $overwriteRequested) {
++        if ($existing) { return $false }
++    }
++    # Overwrite requested => proceed even if a non-empty value is present.
++
++$cell.DataType    = [DocumentFormat.OpenXml.Spreadsheet.CellValues]::InlineString
+     $cell.CellValue   = $null
+     $cell.InlineString      = New-Object DocumentFormat.OpenXml.Spreadsheet.InlineString
+     $cell.InlineString.Text = New-Object DocumentFormat.OpenXml.Spreadsheet.Text
+@@ -401,6 +391,10 @@
+     )
+ 
+         Set-StrictMode -Version 2.0
++
++    # Deterministic bool for overwrite (avoid SwitchParameter edge cases)
++    $overwriteBool = $false
++    try { $overwriteBool = [bool]$Overwrite.IsPresent } catch { $overwriteBool = [bool]$Overwrite }
+ 
+     Import-OpenXmlSdk -ModulesRoot $ModulesRoot | Out-Null
+ 
+@@ -481,14 +475,14 @@
+ 
+             $wroteAny = $false
+             if ($nameRow) {
+-                $nameWritten = (Set-OpenXmlCellText -WorksheetPart $wsp -WorkbookPart $wbp -RowIndex ($nameRow + $t.Offset) -ColLetter $t.NameWriteCol -Value $FullName -Overwrite:$Overwrite)
++                $nameWritten = (Set-OpenXmlCellText -WorksheetPart $wsp -WorkbookPart $wbp -RowIndex ($nameRow + $t.Offset) -ColLetter $t.NameWriteCol -Value $FullName -Overwrite:$overwriteBool)
+                 if ($nameWritten) {
+                     [void]$res.WrittenCells.Add([pscustomobject]@{ Sheet=$sheetName; Row=($nameRow + $t.Offset); Col=$t.NameWriteCol; Value=$FullName })
+                 }
+                 $wroteAny = $nameWritten -or $wroteAny
+             }
+             if ($dateRow) {
+-                $dateWritten = (Set-OpenXmlCellText -WorksheetPart $wsp -WorkbookPart $wbp -RowIndex ($dateRow + $t.Offset) -ColLetter $t.DateWriteCol -Value $SignDateYmd -Overwrite:$Overwrite)
++                $dateWritten = (Set-OpenXmlCellText -WorksheetPart $wsp -WorkbookPart $wbp -RowIndex ($dateRow + $t.Offset) -ColLetter $t.DateWriteCol -Value $SignDateYmd -Overwrite:$overwriteBool)
+                 if ($dateWritten) {
+                     [void]$res.WrittenCells.Add([pscustomobject]@{ Sheet=$sheetName; Row=($dateRow + $t.Offset); Col=$t.DateWriteCol; Value=$SignDateYmd })
+                 }
