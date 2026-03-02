@@ -1,0 +1,138 @@
+--- Modules/Config.ps1
++++ Modules/Config.ps1
+@@ -188,8 +188,13 @@
+     ClientId     = $global:SP_ClientId
+     Certificate  = $global:SP_CertBase64
+ 
+-    EpplusDllPath = (Join-Path $ScriptRoot 'Modules\EPPlus.dll')
+-    EpplusVersion = '4.5.3.3'
++    # EPPlus loader (preferred: EPPlus 6.2.7 + companions, loaded from bytes to bypass MOTW)
++    # NOTE: EPPlus 5+ uses a different license model than 4.x; ensure this is approved for your environment.
++    EpplusVersion = '6.2.7'
++    EpplusDllPath = (Join-Path $global:LibRoot 'EPPlus\EPPlus.6.2.7\lib\net35\EPPlus.dll')
++    EpplusInterfacesDllPath = (Join-Path $global:LibRoot 'EPPlus\EPPlus.Interfaces.6.1.1\lib\net35\EPPlus.Interfaces.dll')
++    EpplusSystemDrawingDllPath = (Join-Path $global:LibRoot 'EPPlus\EPPlus.System.Drawing.6.1.1\lib\net35\EPPlus.System.Drawing.dll')
++
+     AllowNuGetDownload = $false
+     
+     NetworkOnlyFileNames = @('KONTROLLPROVSFIL - Version 2.5.xlsm')
+
+--- Modules/DataHelpers.ps1
++++ Modules/DataHelpers.ps1
+@@ -93,10 +93,107 @@
+     return $null
+ }
+ 
++
++function Resolve-EPPlus6Assemblies {
++    param(
++        [Parameter(Mandatory=$true)][string]$ModulesRoot,
++        [Parameter(Mandatory=$false)][string]$PreferredVersion = '6.2.7'
++    )
++
++    $paths = [ordered]@{
++        EPPlus      = $null
++        Interfaces  = $null
++        SystemDraw  = $null
++    }
++
++    $candidates = New-Object System.Collections.Generic.List[hashtable]
++
++    # 1) Config overrides (if present)
++    try {
++        if ($global:Config) {
++            if ($global:Config.EpplusDllPath) { $paths.EPPlus = ($global:Config.EpplusDllPath + '') }
++            if ($global:Config.EpplusInterfacesDllPath) { $paths.Interfaces = ($global:Config.EpplusInterfacesDllPath + '') }
++            if ($global:Config.EpplusSystemDrawingDllPath) { $paths.SystemDraw = ($global:Config.EpplusSystemDrawingDllPath + '') }
++        }
++    } catch {}
++
++    # If all three set and exist, return immediately
++    if ($paths.EPPlus -and $paths.Interfaces -and $paths.SystemDraw) {
++        if ((Test-Path -LiteralPath $paths.EPPlus) -and (Test-Path -LiteralPath $paths.Interfaces) -and (Test-Path -LiteralPath $paths.SystemDraw)) {
++            return $paths
++        }
++    }
++
++    # 2) Project LibRoot layouts (preferred for IPTCompile)
++    $roots = New-Object System.Collections.Generic.List[string]
++    try {
++        if ($global:LibRoot) { [void]$roots.Add(($global:LibRoot + '')) }
++    } catch {}
++    [void]$roots.Add((Join-Path $ModulesRoot '..\Lib'))
++    [void]$roots.Add((Join-Path $ModulesRoot '..\Modules'))  # legacy
++
++    foreach ($r in $roots) {
++        if (-not $r) { continue }
++        $r2 = (Resolve-Path -LiteralPath $r -ErrorAction SilentlyContinue)
++        if ($r2) { $r = $r2.Path }
++        # NuGet-like structure as in AutoMappscript
++        $ep = Join-Path $r ("EPPlus\EPPlus.$PreferredVersion\lib\net35\EPPlus.dll")
++        $ei = Join-Path $r ("EPPlus\EPPlus.Interfaces.6.1.1\lib\net35\EPPlus.Interfaces.dll")
++        $ed = Join-Path $r ("EPPlus\EPPlus.System.Drawing.6.1.1\lib\net35\EPPlus.System.Drawing.dll")
++        $candidates.Add(@{ EP=$ep; EI=$ei; ED=$ed }) | Out-Null
++
++        # Alternate: flat DLLs directly in LibRoot
++        $candidates.Add(@{
++            EP = (Join-Path $r 'EPPlus.dll')
++            EI = (Join-Path $r 'EPPlus.Interfaces.dll')
++            ED = (Join-Path $r 'EPPlus.System.Drawing.dll')
++        }) | Out-Null
++    }
++
++    foreach ($c in $candidates) {
++        if (-not $paths.EPPlus -and (Test-Path -LiteralPath $c.EP)) { $paths.EPPlus = $c.EP }
++        if (-not $paths.Interfaces -and (Test-Path -LiteralPath $c.EI)) { $paths.Interfaces = $c.EI }
++        if (-not $paths.SystemDraw -and (Test-Path -LiteralPath $c.ED)) { $paths.SystemDraw = $c.ED }
++
++        if ($paths.EPPlus -and $paths.Interfaces -and $paths.SystemDraw) { break }
++    }
++
++    return $paths
++}
++
++
+ function Load-EPPlus {
++    # Prefer EPPlus 6.x if available (matches AutoMappscript approach)
+     if ([System.AppDomain]::CurrentDomain.GetAssemblies() | Where-Object { $_.GetName().Name -eq 'EPPlus' }) { return $true }
+-    $dllPath = Ensure-EPPlus -Version '4.5.3.3'
++
++    # Try EPPlus 6.2.7 (+ required companion assemblies) first
++    try {
++        $p = Resolve-EPPlus6Assemblies -ModulesRoot $PSScriptRoot -PreferredVersion '6.2.7'
++        if ($p.EPPlus -and $p.Interfaces -and $p.SystemDraw -and
++            (Test-Path -LiteralPath $p.EPPlus) -and (Test-Path -LiteralPath $p.Interfaces) -and (Test-Path -LiteralPath $p.SystemDraw)) {
++
++            foreach ($dll in @($p.Interfaces, $p.SystemDraw, $p.EPPlus)) {
++                $bytes = [System.IO.File]::ReadAllBytes($dll)   # bypasses MOTW
++                [void][System.Reflection.Assembly]::Load($bytes)
++            }
++            return $true
++        }
++    } catch {
++        # Fall through to legacy EPPlus 4.x loader
++    }
++
++    # Legacy fallback: EPPlus 4.5.3.3 (LGPL)
++    $dllPath = $null
++    try {
++        $ver = '4.5.3.3'
++        try { if ($global:Config -and $global:Config.EpplusVersion) { $ver = ($global:Config.EpplusVersion + '') } } catch {}
++        if (-not $ver) { $ver = '4.5.3.3' }
++        $dllPath = Ensure-EPPlus -Version $ver
++    } catch {
++        $dllPath = $null
++    }
+     if (-not $dllPath) { return $false }
++
+     try {
+         $bytes = [System.IO.File]::ReadAllBytes($dllPath)
+         [System.Reflection.Assembly]::Load($bytes) | Out-Null
+@@ -106,6 +203,7 @@
+         return $false
+     }
+ }
++
+ 
+ function Set-RowBorder {
+     param ($ws, [int] $row, [int] $firstRow, [int] $lastRow)
