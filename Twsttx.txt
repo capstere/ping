@@ -1,0 +1,187 @@
+Här är en noggrann diff-patch (endast faktiska ändringar, ingen gissning) som löser att MTB Ultra Sample Type 2 (Positive Control 2) alltid ska kräva “RIF Resistance NOT DETECTED” och att “RIF Resistance DETECTED” då blir Major Functional i QC Summary — även när POS/NEG-call fortfarande är POS.
+
+Patchen gör också enligt din spec:
+	•	Sample Type 1 kräver RIF Resistance DETECTED → annars Major Functional
+	•	“MTB DETECTED;Rif Resistance INDETERMINATE” (positiva kontroller) → Minor Functional
+	•	“MTB Trace DETECTED;RIF Resistance INDETERMINATE” → Major Functional
+	•	För MTB Ultra: oväntade resultat (t.ex. INVALID/CIT/SPC Ct=0) som hamnar som ERROR klassas som Minor Functional (inte Instrument Error) i QC Summary.
+
+Patchen är mot: Modules/RuleEngine.ps1
+(Jag behövde inte ändra RuleBank.compiled.ps1 för just detta, eftersom problemet ligger i att POS/NEG-logiken inte fångar “fel RIF-detalj” inom POS.)
+
+--- /mnt/data/zz_base/zz_IPTCompile_20260304/Modules/RuleEngine.ps1	2026-03-03 15:53:33.000000000 +0000
++++ /mnt/data/zz_ipc/zz_IPTCompile_20260304/Modules/RuleEngine.ps1	2026-03-03 18:51:10.392436460 +0000
+@@ -956,6 +956,25 @@
+ if ($e -eq 'NEG') { return 'FP' }
+ return 'MISMATCH'
+ }
++
++function Test-IsMtbUltraAssay {
++param([AllowEmptyString()][string]$Assay)
++
++$a = (($Assay + '')).Trim()
++if (-not $a) { return $false }
++
++# MTB Ultra (IVD + RUO v2) - exakt namn i RuleBank
++return ($a -ieq 'Xpert MTB-RIF Ultra' -or $a -ieq 'MTB-RIF Ultra v2 RUO')
++}
++
++function Normalize-ResultText {
++param([AllowEmptyString()][string]$Text)
++
++$t = (($Text + '') -replace '\s+', ' ').Trim()
++# Normalisera semikolon-format: " ;" -> ";" och "; " -> ";"
++$t = ($t -replace '\s*;\s*', ';')
++return $t
++}
+ if ($e -eq 'POS' -and $o -eq 'NEG') { return 'FN' }
+ if ($e -eq 'NEG' -and $o -eq 'POS') { return 'FP' }
+ return 'MISMATCH'
+@@ -1608,6 +1627,55 @@
+             # Cacha Test Result
+             $testResultVal = (Get-RowField -Row $row -FieldName 'Test Result')
+ 
++            # ============================================================================
++            # MTB Ultra (Xpert MTB-RIF Ultra + MTB-RIF Ultra v2 RUO): detaljerad PASS/FAIL
++            #
++            # Bakgrund: POS/NEG-call räcker inte för MTB Ultra.
++            # - Sample Type 1 (Positive Control 1) ska ha "Rif Resistance DETECTED"
++            # - Sample Type 2 (Positive Control 2) ska ha "Rif Resistance NOT DETECTED"
++            # - "MTB DETECTED;Rif Resistance INDETERMINATE" är MINOR failing (positiva kontroller)
++            # - "MTB Trace DETECTED;RIF Resistance INDETERMINATE" är MAJOR failing
++            #
++            # Detta avsnitt sätter en explicit Deviation så att QC Summary kan visa Major/Minor.
++            # ============================================================================
++            $overrideErrCode = $null
++            $overrideErrName = $null
++            if (Test-IsMtbUltraAssay -Assay $assay) {
++                $ccInt = -1
++                try { $ccInt = [int]$cc } catch { $ccInt = -1 }
++
++                $trN = Normalize-ResultText -Text ($testResultVal + '')
++                $trU = $trN.ToUpperInvariant()
++
++                # MAJOR: MTB Trace DETECTED + RIF INDETERMINATE
++                if (($trU -match '\bMTB\s+TRACE\s+DETECTED\b') -and ($trU -match '\bINDETERMINATE\b')) {
++                    $dev = 'MAJOR_DETAIL'
++                    $overrideErrCode = 'MTB Trace DETECTED;RIF Resistance INDETERMINATE'
++                }
++
++                # MINOR: MTB DETECTED + RIF INDETERMINATE (positiva kontroller)
++                if ($dev -ne 'MAJOR_DETAIL' -and ($ccInt -in 1,2) -and ($trU -match '\bMTB\s+DETECTED\b') -and ($trU -match '\bINDETERMINATE\b')) {
++                    # Utnyttja befintlig QC Summary-logik: MTB + INDETERMINATE => Minor Functional
++                    $dev = 'ERROR'
++                    $overrideErrName = 'MTB DETECTED;RIF Resistance INDETERMINATE'
++                }
++
++                # MAJOR: fel Rif-call för positiva kontroller
++                if ($dev -ne 'MAJOR_DETAIL' -and ($ccInt -in 1,2)) {
++                    $hasRifDet  = ($trU -match '\bRIF\s+RESISTANCE\s+DETECTED\b')
++                    $hasRifNot  = ($trU -match '\bRIF\s+RESISTANCE\s+NOT\s+DETECTED\b')
++
++                    if ($ccInt -eq 1 -and $hasRifNot) {
++                        $dev = 'MAJOR_DETAIL'
++                        $overrideErrCode = 'RIF Resistance NOT DETECTED'
++                    }
++                    elseif ($ccInt -eq 2 -and $hasRifDet) {
++                        $dev = 'MAJOR_DETAIL'
++                        $overrideErrCode = 'RIF Resistance DETECTED'
++                    }
++                }
++            }
++
+             $tokInfo = [pscustomobject]@{ SampleToken=''; BaseToken=''; ActualSuffix=''; SampleNum=''; SampleNumRaw='' }
+             if (($sid + '').Trim()) {
+                 $tokInfo = Get-SampleTokenAndBase -SampleId ($sid + '') -TokenIndex $parCfg.TokenIndex -DelamPattern $delamPattern -ValidSuffixRegex $validSuffix -XChar $parCfg.XChar -PlusChar $parCfg.PlusChar
+@@ -1762,6 +1830,15 @@
+                 RuleFlags        = ''
+             })
+ 
++            # Applicera ev. override av ErrorCode/ErrorName (för MTB Ultra-detaljklassning)
++            if ($overrideErrCode -ne $null -or $overrideErrName -ne $null) {
++                try {
++                    $last = $results[$results.Count - 1]
++                    if ($overrideErrCode -ne $null) { $last.ErrorCode = ($overrideErrCode + '') }
++                    if ($overrideErrName -ne $null) { $last.ErrorName = ($overrideErrName + '') }
++                } catch {}
++            }
++
+         } catch {
+             $sid2 = ''
+             try { $sid2 = (Get-RowField -Row $row -FieldName 'Sample ID') } catch {}
+@@ -2389,6 +2466,14 @@
+     $row++
+ }
+ 
++# Major Functional - detaljfel (t.ex. MTB Ultra: fel RIF-call)
++$mdCount = 0
++if ($sum.DeviationCounts.ContainsKey('MAJOR_DETAIL')) { $mdCount = $sum.DeviationCounts['MAJOR_DETAIL'] }
++if ($mdCount -gt 0) {
++    Write-KV -Row $row -Key '❌ Major Functional (detaljfel)' -Value $mdCount -Col 1 -Major
++    $row++
++}
++
+ # Minor Functional - Ljusröd
+ if ($sum -and $sum.MinorFunctionalError -ne $null -and $sum.MinorFunctionalError -gt 0) {
+     Write-KV -Row $row -Key '⚠ Minor Functional' -Value $sum.MinorFunctionalError -Col 1 -Minor
+@@ -2423,8 +2508,8 @@
+     $row++
+ }
+ 
+-# Visa om inga avvikelser (om OK = Total och inga FP/FN/Minor/DataSummary)
+-if ($fpCount -eq 0 -and $fnCount -eq 0 -and $dsfMajorTotal -eq 0 -and $dsfMinorTotal -eq 0 -and ($sum.MinorFunctionalError -eq $null -or $sum.MinorFunctionalError -eq 0)) {
++# Visa om inga avvikelser (om OK = Total och inga FP/FN/MajorDetail/Minor/DataSummary)
++if ($fpCount -eq 0 -and $fnCount -eq 0 -and $mdCount -eq 0 -and $dsfMajorTotal -eq 0 -and $dsfMinorTotal -eq 0 -and ($sum.MinorFunctionalError -eq $null -or $sum.MinorFunctionalError -eq 0)) {
+     $ws.Cells.Item($row, 1).Value = '✓ Inga avvikelser hittades'
+     $ws.Cells.Item($row, 1).Style.Font.Italic = $true
+     $ws.Cells.Item($row, 1).Style.Font.Color.SetColor($Colors.OkFg)
+@@ -2638,6 +2723,7 @@
+     $errCode = (($r.ErrorCode + '')).Trim()
+     $isKnown = $false
+     $isMtbInd = $false
++    $isMtbUltra = $false
+     # Kontrollera om felkoden finns i regelbanken (numerisk kod)
+     if ($rawDev -eq 'ERROR' -and $errCode -match '^\d{4,5}$') {
+         try { $isKnown = $errLut.Codes.ContainsKey($errCode) } catch { $isKnown = $false }
+@@ -2646,11 +2732,15 @@
+     try {
+         if ((($r.Assay + '') -match '(?i)MTB') -and ((($r.TestResult + '') -match '(?i)INDETERMINATE'))) { $isMtbInd = $true }
+     } catch {}
++    # MTB Ultra: oväntade resultat (inkl. INVALID/CIT/SPC Ct=0) ska vara MINOR failing (inte Instrument Error)
++    try { $isMtbUltra = (Test-IsMtbUltraAssay -Assay ($r.Assay + '')) } catch { $isMtbUltra = $false }
+     switch ($rawDev) {
+             'ERROR' {
+         $isKnown = $false
+         try { $isKnown = [bool]$r.IsKnownCode } catch { $isKnown = $false }
+-        if ($isMtbInd) {
++        if ($isMtbUltra) {
++            $data[$i, 2] = 'Minor Functional'
++        } elseif ($isMtbInd) {
+             $data[$i, 2] = 'Minor Functional'
+         } elseif ($isKnown) {
+             $data[$i, 2] = 'Minor Functional'
+@@ -2659,6 +2749,11 @@
+         }
+         $data[$i, 1] = ($r.ErrorCode + '')
+     }
++        'MAJOR_DETAIL' {
++            $data[$i, 2] = 'Major Functional'
++            # Visa "orsak" i Error Code-kolumnen (kan vara t.ex. "RIF Resistance DETECTED")
++            $data[$i, 1] = ($r.ErrorCode + '')
++        }
+         'FP' {
+             $data[$i, 2] = 'Major Functional'
+             $data[$i, 1] = 'Falskt positiv'
+
+Vad som händer för ditt konkreta fall
+
+För Sample ID B01NOV24B_01_2_20+ (Sample Type 2) med Test Result:
+MTB DETECTED VERY LOW;RIF Resistance DETECTED
+	•	Denna rad får nu Deviation = MAJOR_DETAIL
+	•	QC Summary tar upp den och visar:
+	•	Major Functional
+	•	“Error Code”/orsak: RIF Resistance DETECTED
+
+Om du vill så kan jag även göra en liten komplettering så att “Error Code”-kolumnen istället visar exakt din text:
+Major Functional (RIF Resistance DETECTED)
+— men just nu hamnar “orsaken” i Error Code-kolumnen och Major Functional i avvikelsekolumnen (rent och tydligt i tabellen).
