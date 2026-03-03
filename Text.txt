@@ -1,0 +1,160 @@
+--- Main.ps1 (before)
++++ Main.ps1 (after)
+@@ -3552,12 +3552,33 @@
+ 
+         $testersNeg = @(); $testersPos = @()
+         foreach ($s in $pkgNeg.Workbook.Worksheets | Where-Object { $_.Name -ne "Worksheet Instructions" }) {
+-            $t=$s.Cells["B43"].Text
+-            if ($t) { $testersNeg += ($t -split ",") }
++            $h3 = Get-CellText $s $Layout.SealActiveCheckCell
++            if ($h3 -match '^[0-9]') {
++                $t = ($s.Cells["B43"].Text + '')
++                if ([string]::IsNullOrWhiteSpace($t)) {
++                    # Aktivt datablad men tom B43 => flagga osignerat (skrivs ut under "Name of Tester")
++                    $testersNeg += ("Datasheet ({0}) osignerat" -f $s.Name)
++                } else {
++                    $testersNeg += ($t -split ",")
++                }
++            }
++            elseif ([string]::IsNullOrWhiteSpace($h3) -or $h3 -match '^(?i)(N\/\?A|NA|Tomt( innehåll)?)$') {
++                break
++            }
+         }
+         foreach ($s in $pkgPos.Workbook.Worksheets | Where-Object { $_.Name -ne "Worksheet Instructions" }) {
+-            $t=$s.Cells["B43"].Text
+-            if ($t) { $testersPos += ($t -split ",") }
++            $h3 = Get-CellText $s $Layout.SealActiveCheckCell
++            if ($h3 -match '^[0-9]') {
++                $t = ($s.Cells["B43"].Text + '')
++                if ([string]::IsNullOrWhiteSpace($t)) {
++                    $testersPos += ("Datasheet ({0}) osignerat" -f $s.Name)
++                } else {
++                    $testersPos += ($t -split ",")
++                }
++            }
++            elseif ([string]::IsNullOrWhiteSpace($h3) -or $h3 -match '^(?i)(N\/\?A|NA|Tomt( innehåll)?)$') {
++                break
++            }
+         }
+         $testersNeg = $testersNeg | ForEach-Object { $_.Trim() } | Where-Object { $_ } | Sort-Object -Unique
+         $testersPos = $testersPos | ForEach-Object { $_.Trim() } | Where-Object { $_ } | Sort-Object -Unique
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Ja — jag har öppnat zippen och hittat exakt varför MTB hanterar INVALID “annorlunda” i QC Summary.
+
+Varför blir INVALID “Instrument Error / Okänd” för MTB?
+
+I Modules/RuleEngine.ps1 finns funktionen Get-ObservedCallDetailed som bestämmer ObservedCall (POS/NEG/ERROR/UNKNOWN).
+
+För icke-MTB kör skriptet en “generic fallback” som säger:
+	•	om Test Result innehåller INVALID / NO RESULT / ERROR ⇒ ObservedCall = ERROR
+
+Men för MTB var den fallbacken uttryckligen avstängd via villkor:
+
+if (-not ($ass -match '(?i)MTB')) { ... generic fallback ... }
+
+Alltså: MTB-rader med Test Result = INVALID hamnar ofta i ObservedCall = UNKNOWN (om inget mönster i RuleBank fångar den), vilket gör att QC Summary-switch klassar UNKNOWN som:
+	•	Instrument Error
+	•	Error Code = Okänt
+
+Samtidigt kan Get-ErrorInfo ändå sätta ErrorName = “Invalid w/o error (SPC Ct=0)” (från RuleBank’s NamedBlanks), vilket gör att du ser just kombon du beskrev: Instrument Error + Okänd men med “Invalid w/o error (SPC Ct=0)” i Error Type-kolumnen.
+
+Det är hela buggen.
+
+⸻
+
+Krav du gav
+
+INVALID är alltid “Minor Functional (Invalid)” förutom undantaget med HPV!
+
+HPV-undantaget finns redan: HPV Negative control + INVALID => NEG (alltså inte en deviation).
+
+⸻
+
+Diff-patch (ingen gissning): gör INVALID till Minor Functional även för MTB
+
+Ändringar i: Modules/RuleEngine.ps1
+
+1) Låt INVALID/NO RESULT/ERROR alltid bli ObservedCall=ERROR (även för MTB)
+
+Detta eliminerar att MTB-INVALID faller till UNKNOWN.
+
+--- a/Modules/RuleEngine.ps1
++++ b/Modules/RuleEngine.ps1
+@@
+ } catch {}
+ 
++# INVALID/NO RESULT/ERROR ska alltid ge ObservedCall=ERROR, även för MTB.
++#
++# Varför:
++# - Tidigare var MTB undantagen från generiska token-reglerna, vilket gjorde att t.ex. "INVALID"
++#   kunde falla igenom till Call=UNKNOWN och därmed bli "Instrument Error/Okänt" i QC Summary
++#   trots att ErrorName mappas till en känd "Invalid w/o error (...)`-blank (Minor Functional).
++# - HPV-negativa kontroller är undantag och hanteras redan ovan (INVALID => NEG).
++try {
++    $trU0 = ($tr + '').ToUpperInvariant()
++    $trU0 = [regex]::Replace($trU0, '\s+', ' ').Trim()
++    if ($trU0 -match '\bINVALID\b' -or $trU0 -match 'NO\s+RESULT' -or $trU0 -match '\bERROR\b') {
++        return [pscustomobject]@{ Call='ERROR'; Reason='Generic token: ERROR/INVALID/NO RESULT' }
++    }
++} catch {}
+
+2) Säkerhetsbälte i QC Summary: om TestResult innehåller INVALID ⇒ Minor Functional
+
+Detta gör att INVALID alltid blir Minor Functional även om något annat senare skulle råka sätta deviation till ERROR men IsKnownCode=$false.
+
+--- a/Modules/RuleEngine.ps1
++++ b/Modules/RuleEngine.ps1
+@@
+     $rawDev = (($r.Deviation + '')).Trim().ToUpperInvariant()
+     $errCode = (($r.ErrorCode + '')).Trim()
+     $isKnown = $false
+     $isMtbInd = $false
++    $isInvalidTR = $false
+@@
+     try {
+         if ((($r.Assay + '') -match '(?i)MTB') -and ((($r.TestResult + '') -match '(?i)INDETERMINATE'))) { $isMtbInd = $true }
+     } catch {}
++    # INVALID ska alltid räknas som Minor Functional (Invalid), oavsett assay
++    # (HPV-neg undantas via ObservedCall-override => NEG)
++    try {
++        if ((($r.TestResult + '') -match '(?i)\bINVALID\b')) { $isInvalidTR = $true }
++    } catch { $isInvalidTR = $false }
+     switch ($rawDev) {
+         'ERROR' {
+             $isKnown = $false
+             try { $isKnown = [bool]$r.IsKnownCode } catch { $isKnown = $false }
+-            if ($isMtbInd) {
++            if ($isInvalidTR) {
++                $data[$i, 2] = 'Minor Functional'
++            } elseif ($isMtbInd) {
+                 $data[$i, 2] = 'Minor Functional'
+             } elseif ($isKnown) {
+                 $data[$i, 2] = 'Minor Functional'
+             } else {
+                 $data[$i, 2] = 'Instrument Error'
+             }
+
+
+⸻
+
+Effekt efter patch
+	•	MTB + INVALID hamnar inte längre som UNKNOWN ⇒ ingen “Instrument Error / Okänd”
+	•	QC Summary visar istället:
+	•	Minor Functional
+	•	Error Type: Invalid w/o error (SPC Ct=0) (eller annan “Invalid…”-blank)
+	•	HPV-undantaget (Negative control INVALID => NEG) påverkas inte, eftersom det returnerar NEG innan vi kommer till generiska token-blocket.
+
+Vill du att QC Summary dessutom ska skriva exakt texten Minor Functional (Invalid) (inte bara “Minor Functional”) i avvikelsekolumnen? Det är en liten kosmetisk patch i samma switch, men jag ändrade inte labeln nu eftersom ditt nuvarande format verkar vara kolumn “Avvikelse” = kategori och kolumn “Error Type” = specifik orsak.
