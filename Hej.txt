@@ -1,0 +1,126 @@
+Du har helt rätt: Instrument Error för MTB+INVALID triggas inte av “Invalid w/o error (SPC Ct=0)” (den delen är redan byggd för att bli Minor Functional) — utan av att ObservedCall blir UNKNOWN i Get-ObservedCallDetailed.
+
+Exakt trigger i din zip (RuleEngine.ps1)
+
+I Get-ObservedCallDetailed finns detta:
+	•	För MTB görs bara tre overrides:
+	•	MTB TRACE DETECTED ⇒ POS
+	•	MTB DETECTED ⇒ POS
+	•	MTB NOT DETECTED ⇒ NEG
+	•	All “generic fallback” för tokens (INVALID, NO RESULT, ERROR) körs bara om assay inte är MTB:
+
+if (-not ($ass -match '(?i)MTB')) {
+    ...
+    $hasErr = ($u -match '\bINVALID\b') -or ...
+}
+...
+if (-not ($ass -match '(?i)MTB')) {
+    if ($hasErr) { return Call='ERROR' }
+    ...
+}
+return Call='UNKNOWN'
+
+Så för MTB+INVALID:
+	•	ingen MTB-override träffar
+	•	inga RuleBank-patterns kanske träffar
+	•	generic fallback blockeras
+	•	⇒ return UNKNOWN
+	•	⇒ Classify-Deviation ger UNKNOWN
+	•	⇒ QC Summary-mappar UNKNOWN ⇒ Instrument Error / Okänt
+
+Det är därför det händer.
+
+⸻
+
+Fix med “reducera istället för addera”
+
+Vi ska inte lägga på nya MTB-specialfall, utan bara låta INVALID/NO RESULT/ERROR-token alltid bli ERROR även för MTB – utan att aktivera POS/NEG-tokenlogik för MTB (för då får vi “MIXED” pga “RIF Resistance NOT DETECTED”).
+
+Diff-patch: ändra endast token-detektionen så INVALID inte faller till UNKNOWN för MTB
+
+Fil: Modules/RuleEngine.ps1
+Funktion: Get-ObservedCallDetailed
+
+--- a/Modules/RuleEngine.ps1
++++ b/Modules/RuleEngine.ps1
+@@ -652,26 +652,33 @@
+ $hasErr = $false
+ $hasNeg = $false
+ $hasPos = $false
+ $isMixed = $false
+-if (-not ($ass -match '(?i)MTB')) {
+-    $u = ($tr + '').ToUpperInvariant()
+-    $u = [regex]::Replace($u, '\s+', ' ').Trim()
+-
+-    $hasErr = ($u -match '\bINVALID\b') -or ($u -match 'NO\s+RESULT') -or ($u -match '\bERROR\b')
+-    $hasNeg = ($u -match 'NOT\s+DETECTED') -or ($u -match '\bNEGATIVE\b')
+-
+-    $uNoNotDetected = ($u -replace 'NOT\s+DETECTED', '')
+-    $hasPos = ($uNoNotDetected -match '\bDETECTED\b') -or ($uNoNotDetected -match '\bPOSITIVE\b')
+-
+-    $isMixed = ($hasPos -and $hasNeg)
+-}
++    $u = ($tr + '').ToUpperInvariant()
++    $u = [regex]::Replace($u, '\s+', ' ').Trim()
++
++    # ERROR/INVALID/NO RESULT ska alltid detekteras, även för MTB.
++    # (MTB exkluderas bara från POS/NEG-tokenlogik för att undvika "MIXED" pga "RIF Resistance NOT DETECTED".)
++    $hasErr = ($u -match '\bINVALID\b') -or ($u -match 'NO\s+RESULT') -or ($u -match '\bERROR\b')
++
++    if (-not ($ass -match '(?i)MTB')) {
++        $hasNeg = ($u -match 'NOT\s+DETECTED') -or ($u -match '\bNEGATIVE\b')
++
++        $uNoNotDetected = ($u -replace 'NOT\s+DETECTED', '')
++        $hasPos = ($uNoNotDetected -match '\bDETECTED\b') -or ($uNoNotDetected -match '\bPOSITIVE\b')
++
++        $isMixed = ($hasPos -and $hasNeg)
++    }
+ 
+ foreach ($r in $Patterns) {
+@@ -704,31 +711,24 @@
+     }
+ }
+ 
+-if (-not ($ass -match '(?i)MTB')) {
+-    $u = ($tr + '').ToUpperInvariant()
+-    $u = [regex]::Replace($u, '\s+', ' ').Trim()
+-
+-    $hasErr = ($u -match '\bINVALID\b') -or ($u -match 'NO\s+RESULT') -or ($u -match '\bERROR\b')
+-    $hasNeg = ($u -match 'NOT\s+DETECTED') -or ($u -match '\bNEGATIVE\b')
+-
+-    $uNoNotDetected = ($u -replace 'NOT\s+DETECTED', '')
+-    $hasPos = ($uNoNotDetected -match '\bDETECTED\b') -or ($uNoNotDetected -match '\bPOSITIVE\b')
+-
+-    if ($hasErr) {
+-        return [pscustomobject]@{ Call='ERROR'; Reason='Generic fallback: ERROR/INVALID/NO RESULT token' }
+-    }
++    # Om INVALID/NO RESULT/ERROR finns i texten så ska raden alltid bli ERROR,
++    # även för MTB (annars faller den till UNKNOWN => Instrument Error/Okänt).
++    if ($hasErr) {
++        return [pscustomobject]@{ Call='ERROR'; Reason='Generic fallback: ERROR/INVALID/NO RESULT token' }
++    }
++
++if (-not ($ass -match '(?i)MTB')) {
+     if ($hasPos) {
+         if ($hasNeg) {
+             return [pscustomobject]@{ Call='MIXED'; Reason='Generic fallback: Mixed POS+NEG tokens' }
+         }
+         return [pscustomobject]@{ Call='POS'; Reason='Generic fallback: DETECTED/POSITIVE token' }
+     }
+     if ($hasNeg) {
+         return [pscustomobject]@{ Call='NEG'; Reason='Generic fallback: NOT DETECTED/NEGATIVE token' }
+     }
+ }
+ 
+ return [pscustomobject]@{ Call='UNKNOWN'; Reason='No pattern matched' }
+
+Varför detta fixar utan att skapa nya problem
+	•	Vi aktiverar inte POS/NEG-token fallback för MTB (fortfarande blockad), så du får inte “MIXED” av RIF Resistance NOT DETECTED.
+	•	Vi gör bara att INVALID aldrig kan falla till UNKNOWN för MTB.
+	•	När Call='ERROR' så blir Deviation='ERROR'.
+	•	Och eftersom Get-ErrorInfo redan sätter IsKnownCode=$true för “Invalid w/o error …”, så hamnar QC Summary på:
+	•	Minor Functional (inte Instrument Error)
+
+⸻
+
+Om du vill kan jag också peka ut exakt var i QC Summary den hoppar till “Instrument Error” (det är switchen du såg runt rad ~2658: UNKNOWN => Instrument Error), men efter patchen ska MTB+INVALID inte längre hamna i UNKNOWN.
