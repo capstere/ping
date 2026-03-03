@@ -1,0 +1,100 @@
+Nu behöver jag några uppdateringar av mitt projekt.
+
+Main.ps1
+Config.ps1
+Datahelpers.ps1
+Logging.ps1
+OpenXmlHelpers.ps1
+RuleEngine.ps1
+SharePointClient.ps1
+SignatureHelpers.ps1
+Splash.ps1
+UiStyling.ps1
+RuleBank.comipiled.ps1
+output_template-v4.xlsx
+
+Mapp med Logg för alla LSP-testkörningar:
+Loggar
+Loggfil: jesper.fredriksson_20260303_173914.txt
+
+Mapp för att Testkörningar:
+TEST-LSP
+
+Mapp: 95107
+Worksheet: 2026 02 25 GXMTB RIF ULTRA 95107 Worksheet D25862.xlsx
+Seal Test POS: 2026 02 25 GXMTB RIF ULTRA 95107 Seal Test Pos.xlsx
+Seal Test NEG: 2026 02 25 GXMTB RIF ULTRA 95107 Seal Test Neg.xlsx
+CSV Primary: 2026 02 25 MTB U #95107 Tests Summary ORIG.csv
+CSV Resampling: 2026 02 25 MTB U #95107 Tests Summary RES.csv
+Output-rapport: jesper.fredriksson_output_95107_20260303_174105.xlsx
+Audit-fil: jesper.fredriksson_audit_20260303_174105.csv
+
+Mapp: 31004
+Worksheet: 2025 07 09 HBV VL 31004 Worksheet D51114.xlsx
+Seal Test POS: 2025 07 09 HBV VL 31004 Seal Test Pos.xlsx
+Seal Test NEG: 2025 07 09 HBV VL 31004 Seal Test Neg.xlsx
+CSV Primary: 2025 07 09 HBV VL #31004 Tests Summary_.csv
+Output-rapport: jesper.fredriksson_output_31004_20260303_175353.xlsx
+Audit-fil: jesper.fredriksson_audit_20260303_175353.csv
+
+Mapp: 32101
+Worksheet: 2026 01 28 HIV VL XC 32101 Worksheet D51111.xlsx
+Seal Test POS: 2026 01 28 HIV VL XC 32101 Seal Test Pos.xlsx
+Seal Test NEG: 2026 01 28 HIV VL XC 32101 Seal Test Neg.xlsx
+CSV Primary: 2026 01 28 HIV VL XC #32101 Tests Summary_.csv
+Output-rapport: jesper.fredriksson_output_32101_20260303_180757.xlsx
+Audit-fil: jesper.fredriksson_audit_20260303_180757.csv
+
+Mapp: 33301
+Worksheet: 2026 02 14 HPV v2 33301 Worksheet D16546.xlsx
+Seal Test POS: 2026 02 14 HPV v2 33301 Seal Test Pos.xlsx
+Seal Test NEG: 2026 02 14 HPV v2 33301 Seal Test Neg.xlsx
+CSV Primary: 2026 02 14 HPV v2 #33301 Tests Summary.csv
+CSV Resampling: 2026 02 14 HPV v2 #33301 Tests Summary_RES.csv
+Output-rapport: jesper.fredriksson_output_95107_20260303_174105.xlsx
+Audit-fil: jesper.fredriksson_audit_20260303_183602.csv
+Audit-fil (vid ogiltigt val av bara Resampling .csv, se föfrågan längre ner): jesper.fredriksson_audit_20260303_183253.csv
+
+Mapp: 34509
+Worksheet: 2026 02 28 XP3 COV2 FLU RSV 34509 Worksheet D47377.xlsx
+Seal Test POS: 2026 02 28 XP3 COV2 FLU RSV 34509 Seal Test Pos.xlsx
+Seal Test NEG: 2026 02 28 XP3 COV2 FLU RSV 34509 Seal Test Neg.xlsx
+CSV Primary: 2026 03 01 XP3 COV2 FLU RSV #34509 Tests Summary.csv
+Output-rapport: jesper.fredriksson_output_34509_20260303_184256.xlsx
+Audit-fil: jesper.fredriksson_audit_20260303_184256.csv
+
+Generela fixar som måste implementeras: 
+- Måste sätta spärr så att inte CSV Resampling kan väljas utan Primary.
+- Hitta kör och hitta fler "buggar"
+- För Seal Test-filerna så visar $h3 att fliken är aktiv. Men om B43 är tom så ska det i samma loop där jag bygger "Name of Tester" från B43 ska jag även bygga en lista med: "Datasheet (4) osignerat"
+
+- För TEST-LSP: 32101 i Output-rapport flik "Run Information" saknas Batch No(s) i B19. Skriptet hämtar inte korrekt. Gui-logg säger "[18:07:52]  ⚠️ Worksheet header-avvikelser: Avvikelser: 1 (avvikare=0, saknas=1) – se Run Information!" men "Alla flikar matchar". Misstänkt problem: Flik "QC Data" i 2026 01 28 HIV VL XC 32101 Worksheet D51111.xlsx bidrar till felet. Eventuellt lösning "skip sheet" = QC Data.
+
+- För TEST-LSP: 95107
+- Output-rapport flik "Run Information" bör ha autofit på kolumn B då CSV källornas namn inte får plats: "Primary: 2026 02 25 MTB U #95107 Tests Summary ORIG.csv | Resampling: 2026 02 25 MTB U #95107 Tests Summary RES.csv".
+- Output-rapport QC Summary: Skriver ut "Invalid w/o error (SPC Ct=0)" som Instrument Error felaktigt! Det ska vara Minor Functional för alla Assays (Förrutom HPV undantaget)
+- Output-rapport QC Summary: Hittar inte "Major Functional" i 2026 02 25 MTB U #95107 Tests Summary ORIG.csv för Sample ID: B01NOV24B_01_2_20+ med Test Resultat: MTB DETECTED VERY LOW;RIF Resistance DETECTED. RIF Resistance NOT DETECTED är "Major Functional (RIF Resistance DETECTED)" för Sample Type 2. Det ska alltid vara: "RIF Resistance NOT DETECTED" för Sample Typ 2. Detta behöver uppdateras för MTB Ultra Assays: Xpert MTB-RIF Ultra och MTB-RIF Ultra v2 RUO.
+
+Detaljerade Test Resultat PASS/FAIL för Assays Xpert MTB-RIF Ultra och MTB-RIF Ultra v2 RUO:
+
+For Negative Sample Testing (Sample Type = 0) the GX Test Result matches: 
+“MTB NOT DETECTED”
+
+For Positive Sample Testing (Sample Type = 1) the GX Test Result matches one of the following:
+“MTB DETECTED LOW;Rif Resistance DETECTED”
+“MTB DETECTED VERY LOW;Rif Resistance DETECTED”
+"MTB DETECTED HIGH;Rif Resistance DETECTED" 
+"MTB DETECTED MEDIUM;Rif Resistance DETECTED"
+
+For Positive Sample Testing (Sample Type = 2) the GX Test Result matches one of the following:
+“MTB DETECTED LOW;Rif Resistance NOT DETECTED”
+“MTB DETECTED VERY LOW;Rif Resistance NOT DETECTED”
+"MTB DETECTED HIGH;Rif Resistance NOT DETECTED" 
+"MTB DETECTED MEDIUM;Rif Resistance NOT DETECTED"
+
+For MINOR Failing results,   
+For positive samples giving a result of “MTB DETECTED;Rif Resistance INDETERMINATE”.
+All other unexpected results (including invalid, CIT failure, and SPC Ct=0).
+For MAJOR Failing results, "MAJOR FUNCTIONAL" for the following conditions:
+The Test Result is an incorrect call (e.g., False Negative, False Positive).
+MTB Trace DETECTED;RIF Resistance INDETERMINATE is considered a Major Failure
