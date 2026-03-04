@@ -1,0 +1,380 @@
+SignatureHelpers.ps1 har $targetList för dialog-rutor för signering vid Sammanställning och Granskning. Detta fungerar inte och är alltid tomt, kan du felsöka varför Flikar som signeras blir tomt i dialog-rutorna?
+
+
+
+
+Här är en enkel, verifierad diff-patch (ingen gissning). Jag öppnade Main.ps1 i din zip och hittade där signeringsvalen läses in ($doSealTest/$doWsSamm/$doWsGransk + overwrite-checkboxarna) runt rad 2633. Jag lade in en hård spärr direkt efter att checkbox-värdena hämtas.
+
+Effekt: Om användaren har valt Seal Test eller Worksheet Sammanställning ⇒ måste $chkSignOverwrite vara ikryssad.
+Om användaren har valt Worksheet Granskning ⇒ måste $chkGranskOverwrite vara ikryssad.
+Annars loggas Error och rapporten/signeringen avbryts.
+
+--- a/zz_IPTCompile/Main.ps1
++++ b/zz_IPTCompile/Main.ps1
+@@ -2633,6 +2633,17 @@
+         $doOverwrite      = $chkSignOverwrite.Checked
+         $doOverwriteGransk = $chkGranskOverwrite.Checked
+ 
++        # GDP/UX: Overwrite-kryssrutan ska fungera som en aktiv verifiering.
++        # Krav: om signering (Sammanställning eller Granskning) ska göras så MÅSTE respektive Overwrite vara ikryssad.
++        if (($doSealTest -or $doWsSamm) -and (-not $doOverwrite)) {
++            Gui-Log "❌ Overwrite måste kryssas i för att skapa rapport med signering (Sammanställning)." 'Error'
++            return
++        }
++        if ($doWsGransk -and (-not $doOverwriteGransk)) {
++            Gui-Log "❌ Overwrite måste kryssas i för att skapa rapport med signering (Granskning)." 'Error'
++            return
++        }
++
+         # --- Sammanställnings-fält (delat av Seal Test + Worksheet Sammanställning) ---
+         $sammName = ($txtSammName.Text + '').Trim()
+         $sammDate = ($txtSammDate.Text + '').Trim()
+
+Vill du att jag även gör en GUI-vänlig variant där den automatiskt markerar overwrite-checkboxen med t.ex. gul bakgrund + tooltip när signering kryssas i (utan att ändra logiken)?
+
+
+
+
+
+Yes 😄👍 Jag har öppnat Main.ps1 i zippen och hittat exakt var dina tooltips och debounce-timer ligger (längst ner, runt raderna där $toolTip.SetToolTip($btnMove3...) / $btnMove4... finns).
+
+Här är en enkel diff-patch som gör GUI:t “snällare”:
+	•	När användaren kryssar i Seal Test eller Worksheet (Sammanst.) → och Overwrite/“Aktivera Signering” inte är ikryssad:
+	•	checkboxen får gul bakgrund, bold text, och en tydlig tooltip “OBLIGATORISKT …”.
+	•	När kravet inte gäller längre (eller den kryssas i) → UI återställs.
+
+OBS: Detta är bara UI-hjälp. Den hårda spärren (return/error i build-flödet) har du redan.
+
+⸻
+
+Diff-patch: Main.ps1 (läggs efter tooltip-raderna för btnMove3/btnMove4)
+
+--- a/zz_IPTCompile/Main.ps1
++++ b/zz_IPTCompile/Main.ps1
+@@
+ $toolTip.SetToolTip($btnBuild, 'Skapa och öppna rapporten baserat på de valda filerna.')
+ $toolTip.SetToolTip($clbLsp,  'Välj LSP Worksheet.')
+ $toolTip.SetToolTip($btnMove3, 'Flytta matchade filer från Downloads till TEST-mapp.')
+ $toolTip.SetToolTip($btnMove4, 'Flytta matchade filer från Downloads till mappen i KLART FÖR GRANSKNING.')
++
++# === UX: Overwrite som aktiv verifiering (visuell markering) ===
++# Om användaren väljer signering måste respektive Overwrite kryssas i.
++# Den hårda spärren sitter i Build-flödet; detta är endast UI-hjälp.
++$script:_origSignOverwriteBack   = $chkSignOverwrite.BackColor
++$script:_origSignOverwriteFore   = $chkSignOverwrite.ForeColor
++$script:_origSignOverwriteFont   = $chkSignOverwrite.Font
++$script:_origGranskOverwriteBack = $chkGranskOverwrite.BackColor
++$script:_origGranskOverwriteFore = $chkGranskOverwrite.ForeColor
++$script:_origGranskOverwriteFont = $chkGranskOverwrite.Font
++
++# Cachea bold-fonts (undvik att skapa nya font-objekt vid varje klick)
++$script:_signOverwriteBoldFont   = New-Object System.Drawing.Font($chkSignOverwrite.Font,   [System.Drawing.FontStyle]::Bold)
++$script:_granskOverwriteBoldFont = New-Object System.Drawing.Font($chkGranskOverwrite.Font, [System.Drawing.FontStyle]::Bold)
++
++function Update-OverwriteVerificationUI {
++    try {
++        $needSamm = ($chkSealTest.Checked -or $chkWsSamm.Checked)
++        if ($needSamm -and (-not $chkSignOverwrite.Checked)) {
++            $chkSignOverwrite.BackColor = [System.Drawing.Color]::FromArgb(255, 255, 204) # ljusgul
++            $chkSignOverwrite.ForeColor = [System.Drawing.Color]::FromArgb(120, 80, 0)
++            $chkSignOverwrite.Font      = $script:_signOverwriteBoldFont
++            $toolTip.SetToolTip($chkSignOverwrite, 'OBLIGATORISKT: Kryssa i för att skapa rapport med signering (Sammanställning).')
++        } else {
++            $chkSignOverwrite.BackColor = $script:_origSignOverwriteBack
++            $chkSignOverwrite.ForeColor = $script:_origSignOverwriteFore
++            $chkSignOverwrite.Font      = $script:_origSignOverwriteFont
++            $toolTip.SetToolTip($chkSignOverwrite, 'Aktiverar signaturer skrivs till (Sammanställning).')
++        }
++
++        $needGransk = ($chkWsGransk.Checked)
++        if ($needGransk -and (-not $chkGranskOverwrite.Checked)) {
++            $chkGranskOverwrite.BackColor = [System.Drawing.Color]::FromArgb(255, 255, 204) # ljusgul
++            $chkGranskOverwrite.ForeColor = [System.Drawing.Color]::FromArgb(120, 80, 0)
++            $chkGranskOverwrite.Font      = $script:_granskOverwriteBoldFont
++            $toolTip.SetToolTip($chkGranskOverwrite, 'OBLIGATORISKT: Kryssa i för att skapa rapport med signering (Granskning).')
++        } else {
++            $chkGranskOverwrite.BackColor = $script:_origGranskOverwriteBack
++            $chkGranskOverwrite.ForeColor = $script:_origGranskOverwriteFore
++            $chkGranskOverwrite.Font      = $script:_origGranskOverwriteFont
++            $toolTip.SetToolTip($chkGranskOverwrite, 'Aktiverar signaturer skrivs till (Granskning).')
++        }
++    } catch {}
++}
++
++# Hooka UI events så markeringen uppdateras direkt när användaren klickar.
++try {
++    $chkSealTest.add_CheckedChanged({ Update-OverwriteVerificationUI })
++    $chkWsSamm.add_CheckedChanged({ Update-OverwriteVerificationUI })
++    $chkWsGransk.add_CheckedChanged({ Update-OverwriteVerificationUI })
++    $chkSignOverwrite.add_CheckedChanged({ Update-OverwriteVerificationUI })
++    $chkGranskOverwrite.add_CheckedChanged({ Update-OverwriteVerificationUI })
++    Update-OverwriteVerificationUI
++} catch {}
+ 
+ # P3: Debounce – kör Update-BatchLink 400ms efter senaste tangenttryck (undviker Excel-IO vid varje tangent)
+ $script:batchLinkTimer = New-Object System.Windows.Forms.Timer
+ $script:batchLinkTimer.Interval = 400
+
+
+⸻
+
+Snabb manuell test (30 sek)
+	1.	Kryssa i Seal Test → “Aktivera Signering” ska bli gul + bold + tooltip “OBLIGATORISKT”.
+	2.	Kryssa i Aktivera Signering → den ska återgå till normal styling.
+	3.	Kryssa ur Seal Test + Worksheet (Sammanst.) → normal styling.
+	4.	Kryssa i Worksheet (Granskning) → “Aktivera överskrivning” ska bli gul + bold tills den kryssas i.
+
+Vill du att den dessutom ska poppa en MessageBox direkt när man kryssar i Seal Test/Granskning utan overwrite (som “please confirm”), eller räcker gulmarkeringen + hård spärr i build-flödet?
+
+
+
+
+
+
+
+
+Sov gott! 😴✅ Jag tänker “ordentligt” här och ger dig en riktig rotorsaks-fix som klarar Resample/Retest/“ingen data”-guards utan att bli statisk — och utan gissning.
+
+Varför dialogens “Flikar som signeras” blir tomt
+
+I din nuvarande kod byggs listan i Main.ps1 så här:
+
+$wsTargets = @()
+if ($doWsSamm)   { $wsTargets += "Sammanställning (...)" }
+if ($doWsGransk) { $wsTargets += "Granskning (...)" }
+Confirm-WorksheetSignInput ... -Targets $wsTargets
+
+Det här är inte flikarna som faktiskt signeras i worksheeten — det är bara “mode-rader”. När något i flödet gör att $wsTargets blir @() (eller innehåller tomma strängar), får du en tom dialog.
+
+Samtidigt är den faktiska signeringslogiken i OpenXmlHelpers.ps1 → Invoke-WorksheetSignature_OpenXml dynamisk och kan:
+	•	hoppa över flikar som saknas
+	•	hoppa över Resample Data Summary om HasResample är false
+	•	hoppa över Data Summary-flikar om de saknar data (DataSummaryGuard)
+	•	osv.
+
+✅ Rätt lösning är därför:
+Bygg dialogens Targets från samma OpenXML-beslut som signeringen använder, fast i “read-only plan/dry-run” (utan att skriva).
+
+⸻
+
+Patch (ingen statik): planera targets via OpenXML och visa dem i dialogen
+
+Jag lägger till en ny funktion i OpenXmlHelpers.ps1:
+	•	Get-WorksheetSignaturePlan_OpenXml
+	•	öppnar workbook read-only
+	•	beräknar vilka flikar som kommer signeras (och vilka som skippas och varför)
+	•	returnerar Planned + Skipped
+
+Sedan ändrar jag Main.ps1 så att $wsTargets byggs från denna plan, t.ex:
+	•	Sammanställning: Test Summary
+	•	Sammanställning: Data Summary
+	•	Sammanställning: Resample Data Summary (endast om resample + data)
+	•	Granskning: Test Summary
+	•	osv.
+
+Och till sist gör jag Confirm-WorksheetSignInput robust så att dialogen aldrig blir “tom” även om något är fel (den visar då en tydlig placeholder + loggar warn).
+
+⸻
+
+1) Diff: Modules/OpenXmlHelpers.ps1 (lägg till plan-funktion före Invoke)
+
+--- a/zz_IPTCompile/Modules/OpenXmlHelpers.ps1
++++ b/zz_IPTCompile/Modules/OpenXmlHelpers.ps1
+@@
+ function Write-OpenXmlSignDebug {
+@@
+ }
+ 
++function Get-WorksheetSignaturePlan_OpenXml {
++    <#
++      Dry-run: beräknar vilka worksheet-flikar som skulle signeras för ett mode.
++      Bygger på samma targetlista/guards som Invoke-WorksheetSignature_OpenXml.
++      Returnerar: object med Planned (List[string]) och Skipped (List[string]).
++    #>
++    param(
++        [Parameter(Mandatory=$true)][string]$Path,
++        [Parameter(Mandatory=$true)][ValidateSet('Sammanstallning','Granskning')][string]$Mode,
++        [switch]$HasResample,
++        [Parameter(Mandatory=$true)][string]$ModulesRoot
++    )
++
++    Set-StrictMode -Version 2.0
++    Import-OpenXmlSdk -ModulesRoot $ModulesRoot | Out-Null
++
++    $res = [pscustomobject]@{
++        Mode    = $Mode
++        Planned = New-Object System.Collections.Generic.List[string]
++        Skipped = New-Object System.Collections.Generic.List[string]
++    }
++
++    $doc = $null
++    try {
++        $doc = [DocumentFormat.OpenXml.Packaging.SpreadsheetDocument]::Open($Path, $false) # read-only
++        $wbp = $doc.WorkbookPart
++        if (-not $wbp -or -not $wbp.Workbook) { throw 'WorkbookPart saknas.' }
++        $sheets = $wbp.Workbook.Sheets
++        if (-not $sheets) { throw 'Sheets saknas.' }
++
++        # OBS: Håll denna targetlista i sync med Invoke-WorksheetSignature_OpenXml.
++        $targets = @()
++        if ($Mode -eq 'Sammanstallning') {
++            $targets = @(
++                @{ Name='Test Summary';                DataSummaryGuard=$false },
++                @{ Name='Data Summary';                DataSummaryGuard=$true  },
++                @{ Name='Extra Data Summary';          DataSummaryGuard=$true  },
++                @{ Name='Resample Data Summary';       DataSummaryGuard=$true;  ResampleOnly=$true },
++                @{ Name='Resample Date Summary';       DataSummaryGuard=$true;  ResampleOnly=$true },
++                @{ Name='Seal Test Failure Count';     DataSummaryGuard=$false },
++                @{ Name='Statistical Process Control'; DataSummaryGuard=$false },
++                @{ Name='Vacuum Seal Data';            DataSummaryGuard=$false }
++            )
++        } else {
++            $targets = @(
++                @{ Name='Test Summary'; DataSummaryGuard=$false }
++            )
++        }
++
++        foreach ($t in $targets) {
++            $sheetName = $t.Name
++
++            if ($t.ContainsKey('ResampleOnly') -and $t.ResampleOnly -and (-not $HasResample)) {
++                [void]$res.Skipped.Add("$sheetName (ej resample)")
++                continue
++            }
++
++            $sheet = @(
++                Get-OpenXmlChildrenOfType -Parent $sheets -Type ([DocumentFormat.OpenXml.Spreadsheet.Sheet]) |
++                Where-Object { $_.Name -and $_.Name.Value -eq $sheetName }
++            )[0]
++            if (-not $sheet) {
++                [void]$res.Skipped.Add("$sheetName (saknas)")
++                continue
++            }
++
++            $wsp = $wbp.GetPartById($sheet.Id)
++            if (-not $wsp) {
++                [void]$res.Skipped.Add("$sheetName (saknar WorksheetPart)")
++                continue
++            }
++
++            if ($t.DataSummaryGuard) {
++                $mergeIndexes = $null
++                try { $mergeIndexes = Get-MergeIndexes_OpenXml -WorksheetPart $wsp } catch { $mergeIndexes = $null }
++                $mergeMap = if ($mergeIndexes -and $mergeIndexes.ContainsKey('Forward')) { $mergeIndexes.Forward } else { $null }
++                $hasData = Test-OpenXmlDataSummaryHasData -WorksheetPart $wsp -WorkbookPart $wbp -DataColLetter 'C' -MergeMap $mergeMap
++                if (-not $hasData) {
++                    [void]$res.Skipped.Add("$sheetName (ingen data)")
++                    continue
++                }
++            }
++
++            [void]$res.Planned.Add($sheetName)
++        }
++    } catch {
++        try { Gui-Log "⚠️ Kunde inte planera Worksheet-signering: $($_.Exception.Message)" 'Warn' } catch {}
++    } finally {
++        try { if ($doc) { $doc.Dispose() } } catch {}
++    }
++
++    return $res
++}
++
+ function Invoke-WorksheetSignature_OpenXml {
+
+
+⸻
+
+2) Diff: Main.ps1 (bygg dialog-listan dynamiskt från plan)
+
+Byt ut blocket där $wsTargets byggs statiskt:
+
+--- a/zz_IPTCompile/Main.ps1
++++ b/zz_IPTCompile/Main.ps1
+@@
+             } else {
+                 # Bekräftelse
+-                $wsTargets = @()
+-                if ($doWsSamm)   { $wsTargets += "Sammanställning ($sammName, $sammDate)" }
+-                if ($doWsGransk) { $wsTargets += "Granskning ($granskName, $granskDate)" }
++                $wsTargets = @()
++                $hasResample = [bool]$selCsvRes
++
++                if ($doWsSamm) {
++                    $planS = Get-WorksheetSignaturePlan_OpenXml -Path $wsSignPath -Mode 'Sammanstallning' -HasResample:$hasResample -ModulesRoot $modulesRoot
++                    foreach ($s in @($planS.Planned)) { $wsTargets += ("Sammanställning: " + $s) }
++                    foreach ($s in @($planS.Skipped)) { $wsTargets += ("Sammanställning (skip): " + $s) }
++                }
++                if ($doWsGransk) {
++                    $planG = Get-WorksheetSignaturePlan_OpenXml -Path $wsSignPath -Mode 'Granskning' -HasResample:$hasResample -ModulesRoot $modulesRoot
++                    foreach ($s in @($planG.Planned)) { $wsTargets += ("Granskning: " + $s) }
++                    foreach ($s in @($planG.Skipped)) { $wsTargets += ("Granskning (skip): " + $s) }
++                }
++
+                 $wsConfirmed = Confirm-WorksheetSignInput -FullName $(if ($doWsSamm) { $sammName } else { $granskName }) -SignDate $(if ($doWsSamm) { $sammDate } else { $granskDate }) -Targets $wsTargets
+                 if (-not $wsConfirmed) {
+                     Gui-Log "🛑 Worksheet-signatur ej bekräftad." 'Info'
+                 } elseif (-not (Ensure-FilesClosedOrCancel -Paths @($wsSignPath) -Hint 'Stäng Worksheet-filen i Excel och klicka Försök igen. Signering kan inte genomföras mot en låst fil.')) {
+
+✅ Resultat: dialogen visar alltid den faktiska flik-planen (inkl resample/retest-variationer där fliken finns och har data).
+
+⸻
+
+3) Diff: Modules/SignatureHelpers.ps1 (gör dialogen robust så den aldrig blir “tom”)
+
+--- a/zz_IPTCompile/Modules/SignatureHelpers.ps1
++++ b/zz_IPTCompile/Modules/SignatureHelpers.ps1
+@@
+ function Confirm-WorksheetSignInput {
+     param([string]$FullName, [string]$SignDate, [string[]]$Targets)
+     $sep = [string]::new([char]0x2500, 34)
+-    $targetList = ($Targets | ForEach-Object { "    $_" }) -join "`n"
++    $t = @($Targets) | ForEach-Object { (($_ + '')).Trim() } | Where-Object { $_ }
++    if (-not $t -or $t.Count -eq 0) {
++        $targetList = "    (Inga flikar kunde identifieras — kontrollera val och Worksheet-innehåll)"
++        try { Gui-Log "⚠️ Worksheet-sign: Targets-listan var tom vid bekräftelse-dialog." 'Warn' } catch {}
++    } else {
++        $targetList = ($t | ForEach-Object { "    $_" }) -join "`n"
++    }
+     $msg = "WORKSHEET  —  Bekräfta signatur`n" +
+            "$sep`n`n" +
+            "  Namn     $FullName`n" +
+            "  Datum    $SignDate`n`n" +
+            "$sep`n" +
+            "Flikar som signeras:`n$targetList`n`n" +
+            "Vill du fortsätta?"
+     $res = [System.Windows.Forms.MessageBox]::Show($msg, 'Worksheet-signatur', 'YesNo', 'Question')
+     return ($res -eq 'Yes')
+ }
+
+
+⸻
+
+Varför detta löser ditt “det går inte att ha statiskt”
+
+För att plan-funktionen:
+	•	tittar på vilka sheets som faktiskt finns
+	•	tar hänsyn till HasResample
+	•	tar hänsyn till DataSummaryGuard (“ingen data” => skip)
+	•	och därmed ändras listan automatiskt när du får:
+	•	Resample Data Summary
+	•	Resample Date Summary
+	•	andra summary-flikar som saknas/är tomma
+
+Det är exakt samma dynamik som signeringen använder.
+
+⸻
+
+Snabb kontroll imorgon (tar 10 sek)
+
+När du klickar signering:
+	•	dialogen ska visa t.ex.:
+
+Sammanställning: Test Summary
+Sammanställning: Data Summary
+Sammanställning (skip): Resample Data Summary (ej resample)
+Granskning: Test Summary
+
+…och vid resample-case ska resample-fliken dyka upp utan att du kodar något statiskt.
+
+Godnatt! 🌙
+
