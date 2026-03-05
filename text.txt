@@ -1,0 +1,71 @@
+PS C:\WINDOWS\system32> C:\Users\jesper.fredriksson\AppData\Local\Temp\a3faa9a1-25a3-4804-9723-649f6fec87dc_zz_IPTCompile_FAS8.zip.7dc\zz_IPTCompile\Main.ps1
+[EXEC] Script=C:\Users\jesper.fredriksson\AppData\Local\Temp\a3faa9a1-25a3-4804-9723-649f6fec87dc_zz_IPTCompile_FAS8.zip.7dc\zz_IPTCompile\Main.ps1 | ScriptRoot=C:\Users\jesper.fredriksson\AppData\Local\Tem
+p\a3faa9a1-25a3-4804-9723-649f6fec87dc_zz_IPTCompile_FAS8.zip.7dc\zz_IPTCompile | CWD=C:\WINDOWS\system32
+. : The term 'C:\Users\jesper.fredriksson\AppData\Local\Temp\a3faa9a1-25a3-4804-9723-649f6fec87dc_zz_IPTCompile_FAS8.zip.7dc\zz_IPTCompile\Modules\Config.ps1' is not recognized as the name of a cmdlet, 
+function, script file, or operable program. Check the spelling of the name, or if a path was included, verify that the path is correct and try again.
+At C:\Users\jesper.fredriksson\AppData\Local\Temp\a3faa9a1-25a3-4804-9723-649f6fec87dc_zz_IPTCompile_FAS8.zip.7dc\zz_IPTCompile\Main.ps1:87 char:3
++ . (Join-Path $modulesRoot 'Config.ps1') -ScriptRoot $ScriptRootPath
++   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : ObjectNotFound: (C:\Users\jesper...ules\Config.ps1:String) [], CommandNotFoundException
+    + FullyQualifiedErrorId : CommandNotFoundException
+ 
+IPTCompile single-instance guard fel (fortsätter fail-open): The term 'Get-ConfigFlag' is not recognized as the name of a cmdlet, function, script file, or operable program. Check the spelling of the name, 
+or if a path was included, verify that the path is correct and try again.
+. : The term 'C:\Users\jesper.fredriksson\AppData\Local\Temp\a3faa9a1-25a3-4804-9723-649f6fec87dc_zz_IPTCompile_FAS8.zip.7dc\zz_IPTCompile\Modules\Splash.ps1' is not recognized as the name of a cmdlet, 
+function, script file, or operable program. Check the spelling of the name, or if a path was included, verify that the path is correct and try again.
+At C:\Users\jesper.fredriksson\AppData\Local\Temp\a3faa9a1-25a3-4804-9723-649f6fec87dc_zz_IPTCompile_FAS8.zip.7dc\zz_IPTCompile\Main.ps1:161 char:3
++ . (Join-Path $modulesRoot 'Splash.ps1')
++   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : ObjectNotFound: (C:\Users\jesper...ules\Splash.ps1:String) [], CommandNotFoundException
+    + FullyQualifiedErrorId : CommandNotFoundException
+ 
+. : The term 'C:\Users\jesper.fredriksson\AppData\Local\Temp\a3faa9a1-25a3-4804-9723-649f6fec87dc_zz_IPTCompile_FAS8.zip.7dc\zz_IPTCompile\Modules\SharePointClient.ps1' is not recognized as the name of a 
+cmdlet, function, script file, or operable program. Check the spelling of the name, or if a path was included, verify that the path is correct and try again.
+At C:\Users\jesper.fredriksson\AppData\Local\Temp\a3faa9a1-25a3-4804-9723-649f6fec87dc_zz_IPTCompile_FAS8.zip.7dc\zz_IPTCompile\Main.ps1:162 char:3
++ . (Join-Path $modulesRoot 'SharePointClient.ps1')
++   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : ObjectNotFound: (C:\Users\jesper...PointClient.ps1:String) [], CommandNotFoundException
+    + FullyQualifiedErrorId : CommandNotFoundException
+ 
+. : The term 'C:\Users\jesper.fredriksson\AppData\Local\Temp\a3faa9a1-25a3-4804-9723-649f6fec87dc_zz_IPTCompile_FAS8.zip.7dc\zz_IPTCompile\Modules\UiStyling.ps1' is not recognized as the name of a cmdlet, 
+function, script file, or operable program. Check the spelling of the name, or if a path was included, verify that the path is correct and try again.
+At C:\Users\jesper.fredriksson\AppData\Local\Temp\a3faa9a1-25a3-4804-9723-649f6fec87dc_zz_IPTCompile_FAS8.zip.7dc\zz_IPTCompile\Main.ps1:163 char:3
++ . (Join-Path $modulesRoot 'UiStyling.ps1')
++   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : ObjectNotFound: (C:\Users\jesper...s\UiStyling.ps1:String) [], CommandNotFoundException
+    + FullyQualifiedErrorId : CommandNotFoundException
+ 
+. : The term 'C:\Users\jesper.fredriksson\AppData\Local\Temp\a3faa9a1-25a3-4804-9723-649f6fec87dc_zz_IPTCompile_FAS8.zip.7dc\zz_IPTCompile\Modules\Logging.ps1' is not recognized as the name of a cmdlet, 
+function, script file, or operable program. Check the spelling of the name, or if a path was included, verify that the path is correct and try again.
+At C:\Users\jesper.fredriksson\AppData\Local\Temp\a3faa9a1-25a3-4804-9723-649f6fec87dc_zz_IPTCompile_FAS8.zip.7dc\zz_IPTCompile\Main.ps1:164 char:3
++ . (Join-Path $modulesRoot 'Logging.ps1')
++   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : ObjectNotFound: (C:\Users\jesper...les\Logging.ps1:String) [], CommandNotFoundException
+    + FullyQualifiedErrorId : CommandNotFoundException
+ 
+. : The term 'C:\Users\jesper.fredriksson\AppData\Local\Temp\a3faa9a1-25a3-4804-9723-649f6fec87dc_zz_IPTCompile_FAS8.zip.7dc\zz_IPTCompile\Modules\Core\Log.ps1' is not recognized as the name of a cmdlet, 
+function, script file, or operable program. Check the spelling of the name, or if a path was included, verify that the path is correct and try again.
+At C:\Users\jesper.fredriksson\AppData\Local\Temp\a3faa9a1-25a3-4804-9723-649f6fec87dc_zz_IPTCompile_FAS8.zip.7dc\zz_IPTCompile\Main.ps1:165 char:3
++ . (Join-Path (Join-Path $modulesRoot 'Core') 'Log.ps1')
++   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : ObjectNotFound: (C:\Users\jesper...es\Core\Log.ps1:String) [], CommandNotFoundException
+    + FullyQualifiedErrorId : CommandNotFoundException
+ 
+Sanity: IPT_NETWORK_ROOT=<empty> | IPT_ROOT_EFFECTIVE=<empty> | IPT_ROOT_SOURCE=<empty> | LogPath=<empty> | StructuredLogPath=<empty>
+. : The term 'C:\Users\jesper.fredriksson\AppData\Local\Temp\a3faa9a1-25a3-4804-9723-649f6fec87dc_zz_IPTCompile_FAS8.zip.7dc\zz_IPTCompile\Modules\DataHelpers.ps1' is not recognized as the name of a 
+cmdlet, function, script file, or operable program. Check the spelling of the name, or if a path was included, verify that the path is correct and try again.
+At C:\Users\jesper.fredriksson\AppData\Local\Temp\a3faa9a1-25a3-4804-9723-649f6fec87dc_zz_IPTCompile_FAS8.zip.7dc\zz_IPTCompile\Main.ps1:184 char:3
++ . (Join-Path $modulesRoot 'DataHelpers.ps1')
++   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : ObjectNotFound: (C:\Users\jesper...DataHelpers.ps1:String) [], CommandNotFoundException
+    + FullyQualifiedErrorId : CommandNotFoundException
+ 
+DataHelpers.ps1 laddades inte korrekt: Excel-GetCellText saknas. (Troligen avbruten import p.g.a. fel tidigare i filen.)
+At C:\Users\jesper.fredriksson\AppData\Local\Temp\a3faa9a1-25a3-4804-9723-649f6fec87dc_zz_IPTCompile_FAS8.zip.7dc\zz_IPTCompile\Main.ps1:186 char:5
++     throw "DataHelpers.ps1 laddades inte korrekt: Excel-GetCellText s ...
++     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (DataHelpers.ps1...igare i filen.):String) [], RuntimeException
+    + FullyQualifiedErrorId : DataHelpers.ps1 laddades inte korrekt: Excel-GetCellText saknas. (Troligen avbruten import p.g.a. fel tidigare i filen.)
+ 
+
+PS C:\WINDOWS\system32> 
